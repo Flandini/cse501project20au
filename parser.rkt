@@ -33,7 +33,7 @@
   res)
 
 (define-peg NUM
-  (name res (+ DIGIT))
+  (name res (and (? HYPHEN) (+ DIGIT)))
   (Num res))
 
 (define-peg TYPE
