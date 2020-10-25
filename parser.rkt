@@ -3,51 +3,28 @@
 (require peg
          "ast.rkt")
 
+;; Helper functions
+
+; build-arith-tree the "while loop" that fixes left-associativity
+(define (build-arith-tree left rightlst)
+  (if (or (not rightlst) (empty? rightlst))
+      left
+      (let ([left-tree left])
+        (for ([fst rightlst] [snd (cdr rightlst)])
+          (when (operator? fst)
+            (set! left-tree ((op-str->constr fst) left-tree snd))))
+        left-tree)))
+                    
 ;; Helper regexes
+
 (define-peg/drop _ (* (or #\space #\newline)))
 (define-peg DIGIT (range #\0 #\9))
-
-;; Helper functions
-(define (precedence>=? op1 op2)
-  (let* ([precedences (list "sent" "-" "+" "/" "*")]
-         [prec1 (index-of precedences op1)]
-         [prec2 (index-of precedences op2)])
-    (>= prec1 prec2)))
-
-(define (shunting-yard left rightlst)
-  (if (not rightlst)
-      left
-      (let ([operator-stack (list "sent")]
-            [operand-stack '()])
-        
-        (set! operand-stack (cons left operand-stack))
-        
-        (for ([sym rightlst])
-          (if (operator? sym)
-              (if (precedence>=? sym (first operator-stack))
-                  (set! operator-stack (cons sym operator-stack)) ;; Push op onto opstack
-                  (let ([constr (op-str->constr (car operator-stack))]
-                        [op2 (car operand-stack)]
-                        [op1 (cadr operand-stack)])
-                    (set! operand-stack (cddr operand-stack))
-                    (set! operator-stack (cdr operator-stack))
-                    (set! operand-stack (cons (constr op1 op2) operand-stack))))
-              (set! operand-stack (cons sym operand-stack))))
-                     
-
-        (for ([op operator-stack])
-          (when (operator? op)
-            (let ([constr (op-str->constr op)]
-                  [op2 (car operand-stack)]
-                  [op1 (cadr operand-stack)])
-              (set! operand-stack (cddr operand-stack))
-              (set! operand-stack (cons (constr op1 op2) operand-stack)))))
-
-        (car operand-stack))))
-                        
-                    
-              
-          
+(define-peg LOWER (range #\a #\z))
+(define-peg UPPER (range #\A #\Z))
+(define-peg UNDERSCORE (string "_"))
+(define-peg HYPHEN (string "-"))
+(define-peg NAME (and (or LOWER UPPER UNDERSCORE)
+                 (* (or LOWER UPPER DIGIT UNDERSCORE HYPHEN))))
 
 ;; Except for \" character (34)
 (define-peg ASCII-SEQ
@@ -66,14 +43,7 @@
   (Type res))
 
 (define-peg VAR
-  (name res (and (or (range #\a #\z)
-                     (range #\A #\Z)
-                     (string "_"))
-                 (* (or (range #\a #\z)
-                        (range #\A #\Z)
-                        DIGIT
-                        (string "_")
-                        (string "-")))))
+  (name res NAME)
   (Var res))
 
 (define-peg STATIC-STRING
@@ -89,7 +59,7 @@
                                _
                                MULTEXP))))
   (if righttree
-      (shunting-yard left righttree)
+      (build-arith-tree left righttree)
       left))
 
 (define-peg MULTEXP
@@ -99,7 +69,7 @@
                                _
                                BASEEXP))))
   (if righttree
-      (shunting-yard left righttree)
+      (build-arith-tree left righttree)
       left))
 
 (define-peg BASEEXP
@@ -110,7 +80,7 @@
                    (string ")"))))
 
 (define-peg EXPR
-  (name res (or ARITHEXP NUM STATIC-STRING)))
+  (name res (or ARITHEXP VAR NUM STATIC-STRING)))
 
 (define-peg DECL
   (and (name type TYPE)
@@ -121,3 +91,49 @@
        _
        (name expr EXPR))
   (Decl type var expr))
+
+(define-peg STATEMENT
+  (or DECL RETURN))
+
+(define-peg RETURN
+  (and (string "return") _ (name expr EXPR))
+  (Return expr))
+
+(define-peg ARGRANGE
+  (and (string "{")
+       (name range-low (+ DIGIT))
+       (string ",")
+       _
+       (name range-high (+ DIGIT))
+       (string "}"))
+  (Range range-low range-high))
+
+(define-peg ARG
+  (and (name type TYPE)
+       _
+       (name argname NAME)
+       _
+       (name range (? ARGRANGE)))
+  (Arg type argname range))
+
+(define-peg ARGLIST
+  (name arglist (and ARG
+                     (* (and (string ",") _ ARG))))
+  (filter (lambda (sym) (and (string? sym) (string=? sym ",")))
+          arglist))
+
+(define-peg FUNCDEF
+  (and (name type TYPE)
+       _
+       (name funcname NAME)
+       _
+       (string "(")
+       (name args ARGLIST)
+       (string ")")
+       _
+       (string "{")
+       _
+       (name body (+ (and STATEMENT _))) ; One statement per line
+       _
+       (string "}"))
+  (FuncDec type funcname args body))
