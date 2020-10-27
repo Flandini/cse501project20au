@@ -2,36 +2,38 @@
 
 (provide (all-defined-out))
 
-(struct Num (val))
-(struct Type (val))
-(struct Var (name))
+(struct Num (val) #:transparent)
+(struct Type (val) #:transparent)
+(struct Var (name) #:transparent)
 
 (struct Statement ())
-(struct Decl Statement (type var exp))
-(struct Return Statement (exp))
+(struct Decl Statement (type var exp) #:transparent)
+(struct Return Statement (exp) #:transparent)
 
 ; Function related
-(struct FuncDec Statement (type name args body))
-(struct Arg (type name range))
-(struct Range (low high))
+(struct FuncDec Statement (type name args body) #:transparent)
+(struct Arg (type name range) #:transparent)
+(struct Range (low high) #:transparent)
 
-(struct Expr ())
-(struct BinOp Expr ())
-(struct Add BinOp (l r))
-(struct Minus BinOp (l r))
-(struct Mult BinOp (l r))
-(struct Div BinOp (l r))
+(struct Expr () #:transparent)
+(struct BinOp Expr () #:transparent)
+(struct Add BinOp (l r) #:transparent)
+(struct Minus BinOp (l r) #:transparent)
+(struct Mult BinOp (l r) #:transparent)
+(struct Div BinOp (l r) #:transparent)
 
 (struct UnOp Expr ())
-(struct String UnOp (contents)) ; Consider string and array constructors as unops
-(struct Array UnOp (contents))
+(struct String UnOp (contents) #:transparent) ; Consider string and array constructors as unops
+(struct Array UnOp (contents) #:transparent)
 
 (define operators (list "+" "-" "*" "/"))
 (define (operator? op)
   (member op operators))
+(define (type? sym)
+  (or (equal? 'num) (equal? 'string) (equal? 'array)))
 
-(define (op-str->constr opstr)
-  (match opstr
+(define (op-sym->constr opsym)
+  (match (symbol->string opsym)
     ["+" Add]
     ["-" Minus]
     ["*" Mult]
