@@ -73,7 +73,6 @@
     ["*" Mult]
     ["/" Div]))
 
-
 ;; Printing
 (define (show-args args)
   (string-join (map show-ast args) ", "))
@@ -83,6 +82,9 @@
                  (string-join (map show-ast body) "\n")
                  "\n"))
 
+;; TODO:
+;; 1) Add the new AST nodes.
+;; 2) AST iterator + monad?
 (define (show-ast ast)
   (match ast
     [(Type t) (~a t)]

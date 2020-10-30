@@ -6,7 +6,6 @@
 
 (require "ast.rkt")
 
-;; Todo, If and For
 (define (parse-stmt stmt)
   (match stmt
     [`{,type ,name = ,expr} (Decl (Type (tos type))
@@ -85,10 +84,6 @@
     [`{string-length ,str} (StrLen (parse-expr str))]
     [`{array-empty? ,arr} (ArrEmpty (parse-expr arr))]
     [`{array-length ,arr} (ArrLen (parse-expr arr))]))
-    
-    
-    
-    
 
 (define (parse-args-list argslist [args empty])
   (match argslist
@@ -109,7 +104,6 @@
     [(? empty?) empty]
     [`{,start ,end} (Range start end)]))
     
-
 (define (parse-func func)
   (match func
     [`{,type ,name ,argslist ,body}
