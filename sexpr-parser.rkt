@@ -6,28 +6,25 @@
 
 (require "ast.rkt")
 
-(define prog1 '{num func1 {(num input)} {
-                                       {num c1 = 90}
-                                       {num c2 = 120}
-                                       {num c3 = -70}
-                                       {num c4 = {+ c1 {+ c2 {+ c3 input}}}}
-                                       {return c4}}})
-
+;; Todo, If and For
 (define (parse-stmt stmt)
   (match stmt
     [`{,type ,name = ,expr} (Decl (Type (tos type))
                                     (Var (tos name))
                                     (parse-expr expr))]
+    [`{,type ,name ,argslist ,body} (parse-func `{,type ,name ,argslist ,body})]
     [`{return ,expr} (Return (parse-expr expr))]))
 
 (define (parse-expr e)
   (match e
-    [(? symbol? s) (Var s)]
-    [(? number? i) (Num i)]
+    [(? symbol?) (Var e)]
+    [(? number?) (Num e)]
+    [(? string?) (String e)]
     [`{+ ,l ,r} (Add (parse-expr l) (parse-expr r))]
     [`{* ,l ,r} (Mult (parse-expr l) (parse-expr r))]
     [`{- ,l ,r} (Minus (parse-expr l) (parse-expr r))]
     [`{/ ,l ,r} (Div (parse-expr l) (parse-expr r))]))
+    ;[`{string-contains? str substr} 
 
 (define (parse-args-list argslist [args empty])
   (match argslist
@@ -56,11 +53,13 @@
            [v (tos name)]
            [args (parse-args-list argslist)]
            [exprs (map parse-stmt body)])
-       (FuncDec type v args exprs))]))
+       (FuncDec t v args exprs))]))
 
 (define (tos sym)
   (symbol->string sym))
 
+
+;; Tests
 (module+ test
   (require rackunit)
 
@@ -70,12 +69,24 @@
               (parse-expr `{+ {+ 1 2} 3})
               (Add (Add (Num 1) (Num 2)) (Num 3))))
 
-  (test-case "a var - base case"
+  (test-case "arg with range"
              (check-equal?
-              (parse-expr `{some_var})
-              (Var "some_var")))
+              (parse-args-list `{{num somevar {0 255}}})
+              (list (Arg (Type "num") (Var "somevar") (Range 0 255)))))
 
-  (test-case "a number - base case"
+  (test-case "arg without range"
              (check-equal?
-              (parse-expr `{90})
-               (Num 1))))
+              (parse-args-list `{{string somevar}})
+              (list (Arg (Type "string") (Var "somevar") empty))))
+
+  (test-case "function"
+             (begin
+               (match-let ([(FuncDec type name argslist body)
+                            (parse-stmt `{num func1 {(num input)} {{return c4}}})])
+                 (check-equal? type (Type "num"))
+                 (check-equal? name "func1")
+                 (check-equal? argslist (list
+                                         (Arg (Type "num") (Var "input") empty)))))))
+                 ;(check-equal? body (list
+                  ;                   (Return (Var 'c4))))))))
+             

@@ -2,10 +2,12 @@
 
 (provide (all-defined-out))
 
+;; Terms
 (struct Num (val) #:transparent)
 (struct Type (val) #:transparent)
 (struct Var (name) #:transparent)
 
+;; Statements
 (struct Statement ())
 (struct Decl Statement (type var exp) #:transparent)
 (struct Return Statement (exp) #:transparent)
@@ -15,6 +17,7 @@
 (struct Arg (type name range) #:transparent)
 (struct Range (low high) #:transparent)
 
+;; Expressions
 (struct Expr () #:transparent)
 (struct BinOp Expr () #:transparent)
 (struct Add BinOp (l r) #:transparent)
@@ -22,10 +25,13 @@
 (struct Mult BinOp (l r) #:transparent)
 (struct Div BinOp (l r) #:transparent)
 
+(struct StrContain BinOp (l r) #:transparent)
+
 (struct UnOp Expr ())
-(struct String UnOp (contents) #:transparent) ; Consider string and array constructors as unops
+(struct String UnOp (contents) #:transparent)
 (struct Array UnOp (contents) #:transparent)
 
+;; Helper functions
 (define operators (list "+" "-" "*" "/"))
 (define (operator? op)
   (member op operators))
@@ -39,6 +45,8 @@
     ["*" Mult]
     ["/" Div]))
 
+
+;; Printing
 (define (show-args args)
   (string-join (map show-ast args) ", "))
 
@@ -49,7 +57,6 @@
 
 (define (show-ast ast)
   (match ast
-    [#f 'iden]
     [(Type t) (~a t)]
     [(Num n)  (~a n)]
     [(Var name) (~a name)]
@@ -57,11 +64,11 @@
     [(Array contents) (format "[~a]" (string-join ", " (map ~a contents)))]
 
     [(Range lo hi) (format "{~a, ~a}" (~a lo) (~a hi))]
-    [(Arg type name range) (format "~a ~a ~a"
+    [(Arg type name range) (format "~a ~a~a"
                                    (show-ast type)
-                                   (show-ast range)
+                                   (show-ast name)
                                    (if (and range (not (empty? range)))
-                                       (show-ast range)
+                                       (string-append " " (show-ast range))
                                        ""))]
     [(FuncDec type name args body) (format "~a ~a(~a) {~a}"
                                            (show-ast type)
@@ -75,5 +82,6 @@
     [(Add l r) (format "(~a + ~a)" (show-ast l) (show-ast r))]
     [(Minus l r) (format "(~a - ~a)" (show-ast l) (show-ast r))]
     [(Mult l r) (format "(~a * ~a)" (show-ast l) (show-ast r))]
-    [(Div l r) (format "(~a * ~a)" (show-ast l) (show-ast r))]))
+    [(Div l r) (format "(~a * ~a)" (show-ast l) (show-ast r))]
+    [empty ""]))
     
