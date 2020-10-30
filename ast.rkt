@@ -3,14 +3,20 @@
 (provide (all-defined-out))
 
 ;; Terms
-(struct Num (val) #:transparent)
-(struct Type (val) #:transparent)
-(struct Var (name) #:transparent)
+(struct Term () #:transparent)
+(struct Num Term (val) #:transparent)
+(struct Type Term (val) #:transparent)
+(struct Var Term (name) #:transparent)
+(struct True Term () #:transparent)
+(struct False Term () #:transparent)
 
 ;; Statements
-(struct Statement ())
-(struct Decl Statement (type var exp) #:transparent)
-(struct Return Statement (exp) #:transparent)
+(struct Statement () #:transparent)
+(struct Decl Statement (type var expr) #:transparent)
+(struct Assn Statement (var expr) #:transparent)
+(struct Return Statement (expr) #:transparent)
+(struct If Statement (cnd then else) #:transparent)
+(struct For Statement (idx iter body) #:transparent)
 
 ; Function related
 (struct FuncDec Statement (type name args body) #:transparent)
@@ -25,11 +31,33 @@
 (struct Mult BinOp (l r) #:transparent)
 (struct Div BinOp (l r) #:transparent)
 
-(struct StrContain BinOp (l r) #:transparent)
+(struct Lt BinOp (l r) #:transparent)
+(struct Gt BinOp (l r) #:transparent)
+(struct Lte BinOp (l r) #:transparent)
+(struct Gte BinOp (l r) #:transparent)
+(struct Eq BinOp (l r) #:transparent)
 
-(struct UnOp Expr ())
+(struct StrContains BinOp (l r) #:transparent)
+(struct StrSplit BinOp (l r) #:transparent)
+(struct StrEquals BinOp (l r) #:transparent)
+(struct StrConcat BinOp (l r) #:transparent)
+(struct StrRef BinOp (l r) #:transparent)
+
+(struct ArrContains BinOp (l r) #:transparent)
+(struct ArrSplit BinOp (l r) #:transparent)
+(struct ArrEquals BinOp (l r) #:transparent)
+(struct ArrConcat BinOp (l r) #:transparent)
+(struct ArrRef BinOp (l r) #:transparent)
+
+(struct UnOp Expr () #:transparent)
 (struct String UnOp (contents) #:transparent)
 (struct Array UnOp (contents) #:transparent)
+(struct Not UnOp (val) #:transparent)
+
+(struct StrLen UnOp (str) #:transparent)
+(struct StrEmpty UnOp (str) #:transparent)
+(struct ArrLen UnOp (str) #:transparent)
+(struct ArrEmpty UnOp (str) #:transparent)
 
 ;; Helper functions
 (define operators (list "+" "-" "*" "/"))
