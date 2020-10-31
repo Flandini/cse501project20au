@@ -10,7 +10,7 @@
 
 ;; Terms
 (struct Term () #:transparent)
-(struct Num Term (val) #:transparent)
+(struct Num Term (val) #:transparent #:methods gen:printable-node [(define (node-print node) (format "(Num ~a)" (Num-val node)))])
 (struct Type Term (val) #:transparent)
 (struct Var Term (name) #:transparent)
 (struct True Term () #:transparent)
