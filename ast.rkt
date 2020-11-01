@@ -3,14 +3,22 @@
 (provide (all-defined-out))
 
 (require (for-syntax racket/syntax)
+         syntax/parse/define
          racket/generic)
 
 (define-generics printable-node
   (node-print printable-node))
 
+(define-simple-macro (define-ast-node name:id (fields:id ...) fmt-str:string)
+  #:with 
+
 ;; Terms
 (struct Term () #:transparent)
-(struct Num Term (val) #:transparent #:methods gen:printable-node [(define (node-print node) (format "(Num ~a)" (Num-val node)))])
+(struct Num Term (val)
+  #:transparent
+  #:methods gen:printable-node
+  [(define (node-print node)
+     (format "~a" (Num-val node)))])
 (struct Type Term (val) #:transparent)
 (struct Var Term (name) #:transparent)
 (struct True Term () #:transparent)
@@ -30,46 +38,44 @@
 (struct Range (low high) #:transparent)
 
 ; Expressions
-(define-syntax (define-binop stx)
-  (syntax-case stx ()
-    [(_ name fmt-str)
-     (with-syntax ([node-name (format-id #'name "~a" #'name)]
-                   [expr-l (format-id #'name "~a-l" #'name)]
-                   [expr-r (format-id #'name "~a-r" #'name)])
-       #'(struct node-name BinOp (l r)
-           #:transparent
-           #:methods gen:printable-node
-           [(define (node-print node)
-              (format fmt-str
-                      (node-print (expr-l node))
-                      (node-print (expr-r node))))]))]))
+(define-simple-macro (define-binop name:id fmt-str:string)
+  #:with node-name (format-id #'name "~a" #'name)
+  #:with expr-l (format-id #'name "~a-l" #'name)
+  #:with expr-r (format-id #'name "~a-r" #'name)
+  (struct node-name BinOp (l r)
+    #:transparent
+    #:methods gen:printable-node
+    [(define/generic super-print node-print)
+     (define (node-print node)
+       (format fmt-str
+               (super-print (expr-l node))
+               (super-print (expr-r node))))]))
 
-(define-syntax (define-unop stx)
-  (syntax-case stx ()
-    [(_ name fmt-str)
-     (with-syntax ([node-name (format-id #'name "~a" #'name)]
-                   [expr-val (format-id #'name "~a-val" #'name)])
-       #'(struct node-name UnOp (val)
-           #:transparent
-           #:methods gen:printable-node
-           [(define (node-print node)
-              (format fmt-str
-                      (node-print (expr-val node))))]))]))
+(define-simple-macro (define-unop name:id fmt-str:string)
+  #:with node-name (format-id #'name "~a" #'name)
+  #:with expr-val (format-id #'name "~a-val" #'name)
+  (struct node-name UnOp (val)
+    #:transparent
+    #:methods gen:printable-node
+    [(define/generic super-print node-print)
+     (define (node-print node)
+       (format fmt-str
+               (super-print (expr-val node))))]))
 
-(struct Expr () #:transparent) ; Super classes
+(struct Expr () #:transparent)
 (struct BinOp Expr () #:transparent)
 (struct UnOp Expr () #:transparent)
 
-(define-binop Add "(~a + ~a")
-(define-binop Mult "(~a * ~a")
-(define-binop Minus "(~a - ~a")
-(define-binop Div "(~a / ~a")
+(define-binop Add "(~a + ~a)")
+(define-binop Mult "(~a * ~a)")
+(define-binop Minus "(~a - ~a)")
+(define-binop Div "(~a / ~a)")
 
-(define-binop Lt "(~a < ~a")
-(define-binop Gt "(~a > ~a")
-(define-binop Lte "(~a <= ~a")
-(define-binop Gte "(~a >= ~a")
-(define-binop Eq "(~a == ~a")
+(define-binop Lt "(~a < ~a)")
+(define-binop Gt "(~a > ~a)")
+(define-binop Lte "(~a <= ~a)")
+(define-binop Gte "(~a >= ~a)")
+(define-binop Eq "(~a == ~a)")
 
 (define-binop StrContains "(string-contains? ~a ~a)")
 (define-binop StrSplit "(string-split ~a ~a)")
@@ -115,9 +121,6 @@
                  (string-join (map show-ast body) "\n")
                  "\n"))
 
-;; TODO:
-;; 1) Add the new AST nodes.
-;; 2) AST iterator + monad?
 (define (show-ast ast)
   (match ast
     [(Type t) (~a t)]
