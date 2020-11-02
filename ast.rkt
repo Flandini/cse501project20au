@@ -9,9 +9,6 @@
 (define-generics printable-node
   (node-print printable-node))
 
-(define-simple-macro (define-ast-node name:id (fields:id ...) fmt-str:string)
-  #:with 
-
 ;; Terms
 (struct Term () #:transparent)
 (struct Num Term (val)
@@ -19,10 +16,25 @@
   #:methods gen:printable-node
   [(define (node-print node)
      (format "~a" (Num-val node)))])
-(struct Type Term (val) #:transparent)
-(struct Var Term (name) #:transparent)
-(struct True Term () #:transparent)
-(struct False Term () #:transparent)
+(struct Type Term (val)
+  #:transparent
+  #:methods gen:printable-node
+  [(define (node-print node)
+     (format "~a" (Type-val node)))])
+(struct Var Term (name)
+  #:transparent
+  #:methods gen:printable-node
+  [(define (node-print node)
+     (format "~a" (Var-name node)))])
+(struct True Term ()
+  #:transparent
+  #:methods gen:printable-node
+  [(define (node-print node) "true")])
+(struct False Term ()
+  #:transparent
+  #:methods gen:printable-node
+  [(define (node-print node)
+     "false")])
 
 ;; Statements
 (struct Statement () #:transparent)
