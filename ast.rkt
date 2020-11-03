@@ -16,25 +16,27 @@
   #:methods gen:printable-node
   [(define (node-print node)
      (format "~a" (Num-val node)))])
+
+(struct IntType Term (width signed val)
+  #:transparent
+  #:methods gen:printable-node
+  [(define (node-print node)
+     (let ([sign-str (if (IntType-signed node) "" "u")])
+       (format "~aint~a_t"
+               sign-str
+               (IntType-width node))))])
+
 (struct Type Term (val)
   #:transparent
   #:methods gen:printable-node
   [(define (node-print node)
      (format "~a" (Type-val node)))])
+
 (struct Var Term (name)
   #:transparent
   #:methods gen:printable-node
   [(define (node-print node)
      (format "~a" (Var-name node)))])
-(struct True Term ()
-  #:transparent
-  #:methods gen:printable-node
-  [(define (node-print node) "true")])
-(struct False Term ()
-  #:transparent
-  #:methods gen:printable-node
-  [(define (node-print node)
-     "false")])
 
 ;; Statements
 (struct Statement () #:transparent)
@@ -78,6 +80,36 @@
 (struct BinOp Expr () #:transparent)
 (struct UnOp Expr () #:transparent)
 
+(struct StrSubstr Expr (str from to)
+  #:transparent
+  #:methods gen:printable-node
+  [(define/generic super-print node-print)
+   (define (node-print node)
+     (format "str-substr(~a, ~a, ~a)"
+             (node-print (StrSubstr-str node))
+             (node-print (StrSubstr-from node))
+             (node-print (StrSubstr-to node))))])
+
+(struct StrCaseCmpN Expr (s1 s2 n)
+  #:transparent
+  #:methods gen:printable-node
+  [(define/generic super-print node-print)
+   (define (node-print node)
+     (format "str-case-cmp-n?(~a, ~a, ~a)"
+             (node-print (StrCaseCmpN-s1 node))
+             (node-print (StrCaseCmpN-s2 node))
+             (node-print (StrCaseCmpN-n node))))])
+
+(struct ArrSubstr Expr (arr from to)
+  #:transparent
+  #:methods gen:printable-node
+  [(define/generic super-print node-print)
+   (define (node-print node)
+     (format "arr-subarr(~a, ~a, ~a)"
+             (node-print (ArrSubstr-arr node))
+             (node-print (ArrSubstr-from node))
+             (node-print (ArrSubstr-to node))))])
+
 (define-binop Add "(~a + ~a)")
 (define-binop Mult "(~a * ~a)")
 (define-binop Minus "(~a - ~a)")
@@ -89,16 +121,20 @@
 (define-binop Gte "(~a >= ~a)")
 (define-binop Eq "(~a == ~a)")
 
-(define-binop StrContains "(string-contains? ~a ~a)")
-(define-binop StrSplit "(string-split ~a ~a)")
-(define-binop StrEquals "(string-equals? ~a ~a)")
-(define-binop StrConcat "(string-concat ~a ~a)")
-(define-binop StrRef "(string-ref ~a ~a)")
+(define-binop StrContains "string-contains?(~a, ~a)")
+(define-binop StrSplit "string-split(~a, ~a)")
+(define-binop StrEquals "string-equals?(~a, ~a)")
+(define-binop StrConcat "string-concat(~a, ~a)")
+(define-binop StrAppend "string-append(~a, ~a)")
+(define-binop StrPrefixOf "string-prefix-of?(~a, ~a)")
+(define-binop StrRef "string-ref(~a, ~a)")
 
 (define-binop ArrContains "(array-contains? ~a ~a)")
 (define-binop ArrSplit "(array-split ~a ~a)")
 (define-binop ArrEquals "(array-equals? ~a ~a)")
 (define-binop ArrConcat "(array-concat ~a ~a)")
+(define-binop ArrAppend "array-append(~a, ~a)")
+(define-binop ArrPrefixOf "array-append(~a, ~a)")
 (define-binop ArrRef "(array-ref ~a ~a)")
 
 (define-unop String "\"~a\"")

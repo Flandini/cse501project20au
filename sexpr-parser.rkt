@@ -29,10 +29,7 @@
     [`{return ,expr} (Return (parse-expr expr))]))
 
 (define (parse-expr e)
-  (match e
-    ['true (True)]
-    ['false (False)]
-    
+  (match e    
     [(? symbol?) (Var e)]
     [(? number?) (Num e)]
     [(? string?) (String e)]
@@ -62,12 +59,26 @@
     [`{string-concat ,str1 ,str2} (StrConcat
                                    (parse-expr str1)
                                    (parse-expr str2))]
+    [`{string-append ,str1 ,str2} (StrAppend
+                                   (parse-expr str1)
+                                   (parse-expr str2))]
     [`{string-ref ,str ,idx} (StrRef
                               (parse-expr str)
                               (parse-expr idx))]
     [`{string-contains? ,str ,substr} (StrContains
                                        (parse-expr str)
                                        (parse-expr substr))]
+    [`{string-case-cmp-n? ,s1 ,s2 ,n} (StrCaseCmpN
+                                           (parse-expr s1)
+                                           (parse-expr s2)
+                                           (parse-expr n))]
+    [`{string-prefix-of? ,str ,pref} (StrPrefixOf
+                                      (parse-expr str)
+                                      (parse-expr pref))]
+    [`{str-substr ,str ,from ,to} (StrSubstr
+                                   (parse-expr str)
+                                   (parse-expr from)
+                                   (parse-expr to))]
     [`{array-split ,arr ,subarr} (ArrSplit
                                   (parse-expr arr)
                                   (parse-expr subarr))]
@@ -77,9 +88,19 @@
     [`{array-concat ,arr1 ,arr2} (ArrConcat
                                   (parse-expr arr1)
                                   (parse-expr arr2))]
+    [`{array-append ,str1 ,str2} (ArrAppend
+                                   (parse-expr str1)
+                                   (parse-expr str2))]
     [`{array-ref ,arr ,idx} (ArrRef
                              (parse-expr arr)
                              (parse-expr idx))]
+    [`{array-prefix-of? ,str ,pref} (ArrPrefixOf
+                                     (parse-expr str)
+                                     (parse-expr pref))]
+    [`{arr-substr ,arr ,from ,to} (ArrSubstr
+                                   (parse-expr arr)
+                                   (parse-expr from)
+                                   (parse-expr to))]
     [`{string-empty? ,str} (StrEmpty (parse-expr str))]
     [`{string-length ,str} (StrLen (parse-expr str))]
     [`{array-empty? ,arr} (ArrEmpty (parse-expr arr))]
@@ -163,8 +184,8 @@
               (parse-expr `{== 4 5})
               (Eq (Num 4) (Num 5)))
              (check-equal?
-              (parse-expr '{! true})
-              (Not (True)))
+              (parse-expr '{! 0})
+              (Not (Num 0)))
              (check-equal?
               (parse-expr `{!= a b})
               (Not (Eq (Var 'a) (Var 'b)))))
