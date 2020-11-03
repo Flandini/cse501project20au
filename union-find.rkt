@@ -1,17 +1,16 @@
 #lang racket
 
-(provide (all-defined-out))
+(provide make-set find union)
 
 ; (require data/union-find)
 
-;(define (generate-constraints ast)
-;  (let ([constraints empty])
-
 (define (make-set node h)
-  (dict-set! h node node)
+  (when (not (dict-ref! h node #f))
+    (dict-set! h node node))
   node)
 
 (define (find node h)
+  (make-set node h)
   (let ([parent (dict-ref h node)])
     (when (not (equal? parent node))
       (dict-set! h node (find parent h))))
@@ -24,52 +23,57 @@
       (dict-set! h x y))
     void))
 
-(require "ast.rkt")
-(define h (make-hash))
-(define a (Num 2))
-(dict-set! h a a)
-
+;; Tests
 (module+ test
   (require rackunit)
   (require "ast.rkt")
 
   (test-case "make-set"
              (let* ([dict (make-hash)]
-                    [child (make-set (Num 2) dict)])
+                    [child (make-set (Const 2) dict)])
                (check-equal?
                 (dict-ref dict child)
-                (Num 2))))
+                (Const 2))))
+
+  (test-case "make-set for node already existing"
+             (let* ([dict (make-hash)]
+                    [a (make-set (Const 4) dict)])
+               (dict-set! dict a (Const 5))
+               (make-set (Const 4) dict)
+               (check-equal?
+                (dict-ref dict (Const 4))
+                (Const 5))))
 
   (test-case "find on root"
              (let ([dict (make-hash)])
-               (make-set (Num 2) dict)
+               (make-set (Const 2) dict)
                (check-equal?
-                (find (Num 2) dict)
-                (Num 2))))
+                (find (Const 2) dict)
+                (Const 2))))
 
-  (test-case "exception on find on non-existent type node"
+  (test-case "calls make-set on find on non-existent type node"
              (let ([dict (make-hash)])
-               (check-exn
-                exn:fail?
-                (λ () (find (Num 4) dict)))))
+               (check-equal?
+                (find (Const 4) dict)
+                (Const 4))))
 
   (test-case "find on 'child'"
              (let* ([dict (make-hash)]
-                    [child (make-set (Num 4) dict)]
+                    [child (make-set (Const 4) dict)]
                     [root (make-set (Type "num") dict)])
-               (dict-set! dict (Num 4) (Type "num"))
+               (dict-set! dict (Const 4) (Type "num"))
                (check-equal?
                 (find child dict)
                 (Type "num"))))
 
   (test-case "union for same eqv class"
              (let* ([dict (make-hash)]
-                    [child (make-set (Num 4) dict)]
+                    [child (make-set (Const 4) dict)]
                     [root (make-set (Type "num") dict)])
-               (dict-set! dict (Num 4) (Type "num"))
-               (union (Num 4) (Type "num") dict)
+               (dict-set! dict (Const 4) (Type "num"))
+               (union (Const 4) (Type "num") dict)
                (check-equal?
-                (dict-ref dict (Num 4))
+                (dict-ref dict (Const 4))
                 (Type "num"))
                (check-equal?
                 (dict-ref dict (Type "num"))
@@ -77,13 +81,13 @@
 
   (test-case "union for different eqv class"
              (let* ([dict (make-hash)]
-                    [n1 (make-set (Num 4) dict)]
+                    [n1 (make-set (Const 4) dict)]
                     [n2 (make-set (Type "num") dict)])
                (union n1 n2 dict)
                (check-equal?
                 (find (Type "num") dict)
                 (Type "num"))
                (check-equal?
-                (find (Num 4) dict)
+                (find (Const 4) dict)
                 (Type "num")))))
                                                         

@@ -6,6 +6,7 @@
 
 (require "ast.rkt")
 
+;; TODO: Fix array decls
 (define (parse-stmt stmt)
   (match stmt
     [`{,type ,name = ,expr} (Decl (Type (tos type))
@@ -31,7 +32,7 @@
 (define (parse-expr e)
   (match e    
     [(? symbol?) (Var e)]
-    [(? number?) (Num e)]
+    [(? number?) (Const e)]
     [(? string?) (String e)]
     
     [`{+ ,l ,r} (Add (parse-expr l) (parse-expr r))]
@@ -146,7 +147,7 @@
   (test-case "nested-exprs"
              (check-equal?
               (parse-expr `{+ {+ 1 2} 3})
-              (Add (Add (Num 1) (Num 2)) (Num 3))))
+              (Add (Add (Const 1) (Const 2)) (Const 3))))
 
   (test-case "arg with range"
              (check-equal?
@@ -182,10 +183,10 @@
   (test-case "logical operators"
              (check-equal?
               (parse-expr `{== 4 5})
-              (Eq (Num 4) (Num 5)))
+              (Eq (Const 4) (Const 5)))
              (check-equal?
               (parse-expr '{! 0})
-              (Not (Num 0)))
+              (Not (Const 0)))
              (check-equal?
               (parse-expr `{!= a b})
               (Not (Eq (Var 'a) (Var 'b)))))
@@ -194,15 +195,15 @@
              (check-equal?
               (parse-stmt `{for {a 255} {{b = a}}})
               (For (Var 'a)
-                   (Num 255)
+                   (Const 255)
                    (list (Assn (Var 'b) (Var 'a))))))
 
   (test-case "if stmt"
              (check-equal?
               (parse-stmt `{if {== a 4} {{return 4}} {{return 5}}})
-              (If (Eq (Var 'a) (Num 4))
-                  (list (Return (Num 4)))
-                  (list (Return (Num 5)))))))
+              (If (Eq (Var 'a) (Const 4))
+                  (list (Return (Const 4)))
+                  (list (Return (Const 5)))))))
 
 
              
