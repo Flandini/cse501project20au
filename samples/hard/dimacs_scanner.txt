@@ -1,0 +1,32 @@
+num[] scan_line (string clause_line)
+{
+      string[] literal_strs = string_split(clause_line, " ")
+
+      for ( lit : literal_strs | num[] literals )
+      {
+      	  array_append (literals, ston(lit))
+      }
+
+      return literals
+}
+
+/* can't return list of lists, so return one list of integer literals
+ * where clauses are separated by a 0
+ */
+num[] parse_dimacs (string dimacs)
+{
+	// split on 'sequences of any of' vs split on 'substring'
+	string[] lines = string_split(dimacs, "\n\t\r")
+
+	for ( line : lines | num[] tokens )
+	{
+		if ( !string_equals? ( first ( line ), "c" ) &&
+		     !string_equals? ( first ( line ), "p" ) )
+		{
+			array_concat (tokens, scan_line ( line ) )
+		}
+	}
+
+	return tokens
+}
+
