@@ -5,7 +5,7 @@ num {0, 255} array_average(num {0, 255} [] {0, 50000} numbers)
     	acc = acc + n
     }
 
-    num average = acc / array_length (numbers)
+    num averageish = acc / array_length (numbers)
 
-    return average
+    return averageish
 }
