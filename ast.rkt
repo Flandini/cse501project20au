@@ -30,7 +30,9 @@
 (struct BinOp Expr () #:transparent)
 (struct UnOp Expr () #:transparent)
 
-(struct Not UnOp () #:transparent)
+(struct Not UnOp (val) #:transparent)
+(struct And BinOp (l r) #:transparent)
+(struct Or BinOp (l r) #:transparent)
 
 (struct Add BinOp (l r) #:transparent)
 (struct Mult BinOp (l r) #:transparent)
@@ -67,8 +69,8 @@
 (define (type? sym)
   (or (equal? 'num) (equal? 'string) (equal? 'array)))
 
-(define (op-sym->constr opsym)
-  (match (symbol->string opsym)
+(define (op-str->constr opsym)
+  (match opsym
     ["+" Add]
     ["-" Minus]
     ["*" Mult]

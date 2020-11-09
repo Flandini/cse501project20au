@@ -1,6 +1,6 @@
 num[] scan_line (string clause_line)
 {
-      string[] literal_strs = string_split(clause_line, " ")
+      string[] literal_strs = string_split (clause_line, " ")
 
       for ( lit : literal_strs | num[] literals )
       {

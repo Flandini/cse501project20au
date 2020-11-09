@@ -5,8 +5,7 @@
 #include <string.h>
 #include <time.h>
 
-int*
-scan_line(char* line)
+int* scan_line(char* line)
 {
   char* buffer = calloc(255, sizeof(char));
   int buffer_idx = 0;
@@ -115,6 +114,7 @@ String_split (String_t* src, const char* sep)
 int
 String_to_int (String_t* s)
 {
+  /*
   for (size_t i = 0; i < s->length; i++)
     {
       if (i == 0)
@@ -122,9 +122,11 @@ String_to_int (String_t* s)
 	  assert (s->body[i] == '-' || isdigit(s->body[i]));
 	  continue;
 	}
-      
-      assert ( isdigit (s->body[i]) );
-    }
+      else
+	{
+	  assert ( isdigit (s->body[i]) );
+	}
+	}*/
 
   return atoi(s->body);
 }
@@ -170,11 +172,8 @@ compiled_scan_line (char* line)
 int
 main(int arg, char** argv)
 {
-  char* dimacs_lines = "-1 3 4 15 -16 0";
-  //  int* tokens = scan_line (dimacs_lines);
+  char* dimacs_lines = "-1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 -1 3 4 15 -16 0";
   int* tokens;
-  // better_scan_line(dimacs_lines);
-  // int* tokens = compiled_scan_line (dimacs_lines);
 
   float start_time, end_time;
   float* times = calloc (100000, sizeof (float));
@@ -182,7 +181,7 @@ main(int arg, char** argv)
   for (int i = 0; i < 100000; i++)
     {
       start_time = (float) clock() / CLOCKS_PER_SEC;
-      //      tokens = better_scan_line (dimacs_lines);
+      //tokens = better_scan_line (dimacs_lines);
       tokens = compiled_scan_line (dimacs_lines);
       end_time = (float) clock() / CLOCKS_PER_SEC;
       
