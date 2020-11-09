@@ -28,7 +28,7 @@
 ;; Productions start
 ;; <NUM> ::= <DIGIT>+
 (define-peg NUM
-  (name res (+ DIGIT))
+  (name res (and (? (string "-")) (+ DIGIT)))
   (Num (string->number res)))
 
 ;; <TYPE> ::= "num[]" / "string[]" / "num" / "string"
@@ -90,13 +90,6 @@
     ["arr-length" ArrLength]
     ["arr-first" ArrFirst]))
 
-(define-peg ARITHOP
-  (name op (or (string "+")
-               (string "-")
-               (string "*")
-               (string "/")))
-  (op-str->constr op))
-
 (define-peg COMPOP
   (name op (or (string "<")
                (string ">")
@@ -126,13 +119,67 @@
   NumToStr)
 ;; Operator Parsing END
 
+;; Function calls start
+(define-peg UNARY-FNCALL
+  (or (and (name constructor STRING-UNOP)
+           WHITESPACE
+           (string "(")
+           WHITESPACE
+           (name arg CHAINABLE-EXPR)
+           WHITESPACE
+           (string ")"))
+      (and (name constructor ARRAY-UNOP)
+           WHITESPACE
+           (string "(")
+           WHITESPACE
+           (name arg CHAINABLE-EXPR)
+           WHITESPACE
+           (string ")"))
+      (and (name constructor MISC-OP)
+           WHITESPACE
+           (string "(")
+           WHITESPACE
+           (name arg CHAINABLE-EXPR)
+           WHITESPACE
+           (string ")")))
+  (constructor arg))
+
+(define-peg BINARY-FNCALL
+  (or (and (name constructor STRING-BINOP)
+           WHITESPACE
+           (string "(")
+           WHITESPACE
+           (name arg1 CHAINABLE-EXPR)
+           WHITESPACE
+           (string ",")
+           WHITESPACE
+           (name arg2 CHAINABLE-EXPR)
+           WHITESPACE
+           (string ")"))
+      (and (name constructor ARRAY-BINOP)
+           WHITESPACE
+           (string "(")
+           WHITESPACE
+           (name arg1 CHAINABLE-EXPR)
+           WHITESPACE
+           (string ",")
+           WHITESPACE
+           (name arg2 CHAINABLE-EXPR)
+           WHITESPACE
+           (string ")")))
+  (constructor arg1 arg2))
+  
+(define-peg FNCALL
+  (or BINARY-FNCALL UNARY-FNCALL))
+;; Function calls end
+
 ;; Arithmetic operations start
 (define-peg AEXPL
   (and (name left AEXPR)
        WHITESPACE
        (name righttree (* (and (name op (or (string "+") (string "-")))
                                WHITESPACE
-                               AEXPR))))
+                               AEXPL))))
   (if righttree
       (build-arith-tree left righttree)
       left))
@@ -142,7 +189,7 @@
        WHITESPACE
        (name righttree (* (and (name op (or (string "*") (string "/")))
                                WHITESPACE
-                               BASE-AEXP))))
+                               AEXPR))))
   (if righttree
       (build-arith-tree left righttree)
       left))
@@ -156,11 +203,12 @@
         (string ")"))
    NUM
    VAR))
-
 ;; Arithmetic operations end
     
-;(define-peg CHAINABLE-EXPR
-;  (or 
+(define-peg CHAINABLE-EXPR
+  (or (and STRING-UNOP CHAINABLE-EXPR)
+      (and STRING-BINOP CHAINABLE-EXPR)
+      AEXPL))
 
 ;; <RETURN> ::= return <EXPR>
 (define-peg RETURN
