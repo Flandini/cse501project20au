@@ -27,6 +27,7 @@
     (lexer 
         [(eof) 'EOF]
         [whitespace (dsl-lexer input-port)]
+        ["," 'COMMA]
         ["&&" 'AND]
         ["||" 'OR]
         ["for" 'FOR]
@@ -60,7 +61,7 @@
         ["|" 'PIPE]
         [operator (string->symbol lexeme)]
         [(:or "0" (:: (:? "-") (:/ "1" "9") (:* digit))) (token-NUM (string->number lexeme))]
-        [(:: "\"" any-string "\"") (token-STR lexeme)]
+        [(:: "\"" (:* (:- any-char "\"")) "\"") (token-STR lexeme)]
         [var-name (token-VAR lexeme)]))
 ;; END LEXER
 
@@ -80,10 +81,14 @@
                (left - +)
                (left * /)
                (right !)
+               (left STR-APPEND  STR-CONCAT STR-EQUALS? 
+                     STR-FIRST STR-SPLIT STR-LENGTH STON
+                     ARR-APPEND ARR-CONCAT ARR-EQUALS?
+                     ARR-LENGTH ARR-FIRST NTOS)
                (left LPAREN))
         (grammar
             (statement
-                [(decl) $1])
+                [(decl SEMICOLON) $1])
             (type 
                 [(NUMTYPE) (Type "num")]
                 [(STRINGTYPE) (Type "string")]
@@ -91,13 +96,30 @@
                 [(NUMARRAYTYPE) (Type "num[]")])
             (decl
                 [(type VAR = expr) (Decl $1 $2 $4)])
+            (binaryfn
+                [(ARR-CONCAT) ArrConcat]
+                [(ARR-APPEND) ArrAppend]
+                [(ARR-EQUALS?) ArrEquals]
+                [(STR-CONCAT) StrConcat]
+                [(STR-APPEND) StrAppend]
+                [(STR-EQUALS?) StrEquals]
+                [(STR-SPLIT) StrSplit])
+            (unaryfn
+                [(ARR-LENGTH) ArrLength]
+                [(ARR-FIRST) ArrFirst]
+                [(STR-LENGTH) StrLength]
+                [(STR-FIRST) StrFirst]
+                [(STON) StrToNum]
+                [(NTOS) NumToStr])
             (expr 
+                [(expr OR expr) (Or $1 $3)]
+                [(expr AND expr) (And $1 $3)]
                 [(expr + expr) (Add $1 $3)]
                 [(expr - expr) (Minus $1 $3)]
                 [(expr * expr) (Mult $1 $3)]
                 [(expr / expr) (Div $1 $3)]
-                [(expr AND expr) (And $1 $3)]
-                [(expr OR expr) (Or $1 $3)]
+                [(unaryfn LPAREN expr RPAREN) ($1 $3)]
+                [(binaryfn LPAREN expr COMMA expr RPAREN) ($1 $3 $5)]
                 [(VAR) (Var $1)]
                 [(NUM) (Num $1)]
                 [(STR) (String $1)])
