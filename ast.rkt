@@ -13,11 +13,11 @@
 (struct Decl Statement (type var expr) #:transparent)
 (struct Return Statement (expr) #:transparent)
 (struct If Statement (cnd then els) #:transparent)
-(struct For Statement (idx-1 iter-1 idx-2 iter-2 decl body) #:transparent)
+(struct For Statement (iters decl body) #:transparent)
 
 ; Function related
-(struct FuncDec Statement (type name args body) #:transparent)
-(struct Arg (type name range) #:transparent)
+(struct FuncDec Statement (type name args body range) #:transparent)
+(struct Arg (type name range subrange) #:transparent)
 (struct Range (low high) #:transparent)
 
 ; Constructors

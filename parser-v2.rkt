@@ -7,7 +7,7 @@
 
 ;; START LEXER
 (define-empty-tokens op-tokens (+ - / * > >= < <= != == ! AND OR = COMMA
-                                FOR IF COLON LBRACE RBRASE LPAREN RPAREN LSQUARE RQUARE
+                                FOR IF ELSE COLON LBRACE RBRACE LPAREN RPAREN LSQUARE RSQUARE
                                 NUMTYPE STRINGTYPE RETURN STRINGARRAYTYPE NUMARRAYTYPE
                                 ARR-CONCAT ARR-APPEND ARR-LENGTH ARR-FIRST ARR-EQUALS?
                                 STR-CONCAT STR-APPEND STR-LENGTH STR-FIRST STR-EQUALS?
@@ -32,6 +32,7 @@
         ["||" 'OR]
         ["for" 'FOR]
         ["if" 'IF]
+        ["else" 'ELSE]
         [":" 'COLON]
         ["{" 'LBRACE]
         ["}" 'RBRACE]
@@ -69,7 +70,7 @@
 (define dsl-parser
     (parser 
         (tokens op-tokens val-tokens)
-        (start expr)
+        (start program)
         (end EOF)
         (error (lambda (tok-ok? tok-name tok-value) (displayln 'error)))
         (precs (left COMMA)
@@ -87,15 +88,67 @@
                      ARR-LENGTH ARR-FIRST NTOS)
                (left LPAREN))
         (grammar
+            (program
+                [(funcdecl) (list $1)]
+                [(funcdecl program) (cons (list $1) $2)])
             (statement
-                [(decl SEMICOLON) $1])
+                [(decl SEMICOLON) $1]
+                [(return SEMICOLON) $1]
+                [(if) $1]
+                [(loop) $1])
+            (statement-list
+                [(statement) (list $1)]
+                [(statement statement-list) (cons (list $1) $2)])
             (type 
                 [(NUMTYPE) (Type "num")]
                 [(STRINGTYPE) (Type "string")]
                 [(STRINGARRAYTYPE) (Type "string[]")]
                 [(NUMARRAYTYPE) (Type "num[]")])
+            (range
+                [(LBRACE NUM COMMA NUM RBRACE) (Range $2 $4)])
+            (arg 
+                [(type VAR) (Arg $1 $2 empty empty)]
+                [(type VAR range) (Arg $1 $2 $3 empty)]
+                [(NUMTYPE range VAR) (Arg (Type "num") $3 empty $2)]
+                [(NUMTYPE range VAR range) (Arg (Type "num") $3 $4 $2)]
+                [(STRINGTYPE range VAR) (Arg (Type "string") $3 empty $2)]
+                [(STRINGTYPE range VAR range) (Arg (Type "string") $3 $4 $2)])
+            (argslist
+                [(arg) (list $1)]
+                [(arg COMMA argslist) (cons (list $1) $3)])
+            (funcdecl
+                [(type range VAR LPAREN RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $3 empty $7 $2)]
+                [(type VAR LPAREN RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $2 empty $6 empty)]
+                [(type range VAR LPAREN argslist RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $3 $5 $8 $2)]
+                [(type VAR LPAREN argslist RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $2 $4 $7 empty)])
             (decl
                 [(type VAR = expr) (Decl $1 $2 $4)])
+            (return 
+                [(RETURN expr) (Return $2)])
+            (conditional
+                [(compare) $1]
+                [(expr) $1])
+            (if 
+                [(IF LPAREN conditional RPAREN LBRACE statement-list RBRACE)
+                    (If $3 $6 empty)]
+                [(IF LPAREN conditional RPAREN LBRACE statement-list RBRACE ELSE LBRACE statement-list RBRACE)
+                    (If $3 $6 $10)])
+            (iterator
+                [(VAR) (Var $1)]
+                [(NUM) (Num $1)])
+            (iterator-body
+                [(VAR COLON iterator) (list (list $1 $3))]
+                [(VAR COLON iterator COMMA VAR COLON iterator) 
+                    (cons (list $1 $3) (list $5 $7))])
+            (loop
+                [(FOR LPAREN iterator-body RPAREN LBRACE statement-list RBRACE) 
+                    (For $3 empty $6)]
+                [(FOR LPAREN iterator-body PIPE decl RPAREN LBRACE statement-list RBRACE)
+                    (For $3 $5 $8)])
             (binaryfn
                 [(ARR-CONCAT) ArrConcat]
                 [(ARR-APPEND) ArrAppend]
