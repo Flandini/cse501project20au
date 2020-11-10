@@ -17,7 +17,9 @@
 ;; Helper productions
 (define-peg DIGIT (range #\0 #\9))
 (define-peg CHAR-RANGE (or (range #\a #\z) (range #\A #\Z)))
-(define-peg/drop WHITESPACE (* (or #\space #\newline #\tab)))
+(define-peg/drop WHITESPACE (* (or (char #\space)
+                                   (char #\newline)
+                                   (char #\tab))))
 (define-peg IDENTIFIER (and CHAR-RANGE
                             (*
                              (or CHAR-RANGE
@@ -179,7 +181,7 @@
        WHITESPACE
        (name righttree (* (and (name op (or (string "+") (string "-")))
                                WHITESPACE
-                               AEXPL))))
+                               AEXPR))))
   (if righttree
       (build-arith-tree left righttree)
       left))
@@ -206,9 +208,7 @@
 ;; Arithmetic operations end
     
 (define-peg CHAINABLE-EXPR
-  (or (and STRING-UNOP CHAINABLE-EXPR)
-      (and STRING-BINOP CHAINABLE-EXPR)
-      AEXPL))
+  (or FNCALL AEXPL))
 
 ;; <RETURN> ::= return <EXPR>
 (define-peg RETURN
@@ -228,4 +228,15 @@
        ;       (name expr EXPR
   (Decl type var '())) ; todo
 
+(module+ test
+  (require rackunit)
 
+  (test-case "add lassoc"
+    (check-equal?
+     (peg AEXPL "1 + 2 + 3")
+     (Add (Add (Num 1) (Num 2)) (Num 3))))
+
+  (test-case "minus lassoc"
+    (check-equal?
+      (peg AEXPL "3 - 2 - 1")
+      (Minus (Minus (Num 3) (Num 2)) (Num 1)))))

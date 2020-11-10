@@ -22,8 +22,8 @@
 
 ; Constructors
 (struct Constructor () #:transparent)
-(struct String Constructor (val) #:transparent)
-(struct Array Constructor (vals) #:transparent)
+(struct String Constructor (val) #:transparent) 
+(struct Array Constructor (vals) #:transparent) ; TODO, handle parsing these
 
 ; Expressions
 (struct Expr () #:transparent)
