@@ -11,6 +11,7 @@
 ;; Statements
 (struct Statement () #:transparent)
 (struct Decl Statement (type var expr) #:transparent)
+(struct IterAssn Statement (var expr) #:transparent)
 (struct Return Statement (expr) #:transparent)
 (struct If Statement (cnd then els) #:transparent)
 (struct For Statement (iters decl body) #:transparent)
@@ -60,6 +61,7 @@
 (struct ArrFirst UnOp (val) #:transparent)
 
 (struct NumToStr UnOp (val) #:transparent)
+(struct UserFnCall Expr (name argslist) #:transparent)
 
 
 ;; Helper functions

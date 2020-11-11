@@ -13,12 +13,14 @@
                                 STR-CONCAT STR-APPEND STR-LENGTH STR-FIRST STR-EQUALS?
                                 STON NTOS STR-SPLIT SEMICOLON PIPE EOF))
 
-(define-tokens val-tokens (VAR NUM STR))
+(define-tokens val-tokens (VAR NUM STR COMMENT))
 
 (define-lex-abbrevs
     (lower (:/ "a" "z"))
     (upper (:/ "A" "Z"))
     (digit (:/ "0" "9"))
+    (single-line-comment (:: "//" (:* any-char) #\newline))
+    (multi-line-comment (:: "/*" (:* (:or (:~ "*") (:: (:+ "*") (:& (:~ "*") (:~ "/"))))) (:+ "*") "/"))
     (whitespace (:or #\tab #\space #\newline))
     (operator (:or "+" "-" "/" "*" ">" ">=" "<" "<=" "!=" "==" "!" "="))
     (var-name (:: (:or lower upper) (:* (:or lower upper digit "_" "-")))))
@@ -27,6 +29,8 @@
     (lexer
         [(eof) 'EOF]
         [whitespace (dsl-lexer input-port)]
+        [single-line-comment (dsl-lexer input-port)]
+        [multi-line-comment (dsl-lexer input-port)]
         ["," 'COMMA]
         ["&&" 'AND]
         ["||" 'OR]
@@ -45,17 +49,17 @@
         [(:: "string" (:* whitespace) "[]") 'STRINGARRAYTYPE]
         [(:: "num" (:* whitespace) "[]") 'NUMARRAYTYPE]
         ["return" 'RETURN]
-        ["arr-concat" 'ARR-CONCAT]
-        ["arr-append" 'ARR-APPEND]
-        ["arr-length" 'ARR-LENGTH]
-        ["arr-first" 'ARR-FIRST]
-        ["arr-length?" 'ARR-LENGTH?]
-        ["str-concat" 'STR-CONCAT]
-        ["str-append" 'STR-APPEND]
-        ["str-length" 'STR-LENGTH]
-        ["str-first" 'STR-FIRST]
-        ["str-split" 'STR-SPLIT]
-        ["str-equals?" 'STR-EQUALS?]
+        ["arr_concat" 'ARR-CONCAT]
+        ["arr_append" 'ARR-APPEND]
+        ["arr_length" 'ARR-LENGTH]
+        ["arr_first" 'ARR-FIRST]
+        ["arr_length?" 'ARR-LENGTH?]
+        ["str_concat" 'STR-CONCAT]
+        ["str_append" 'STR-APPEND]
+        ["str_length" 'STR-LENGTH]
+        ["str_first" 'STR-FIRST]
+        ["str_split" 'STR-SPLIT]
+        ["str_equals?" 'STR-EQUALS?]
         ["ston" 'STON]
         ["ntos" 'NTOS]
         [";" 'SEMICOLON]
@@ -77,7 +81,7 @@
 (define dsl-parser
     (parser 
         (tokens op-tokens val-tokens)
-        (start expr)
+        (start program)
         (debug "debug.out")
         (end EOF)
         (error error-handler)
@@ -98,15 +102,16 @@
         (grammar
             (program
                 [(funcdecl) (list $1)]
-                [(funcdecl program) (cons (list $1) $2)])
+                [(funcdecl program) (cons $1 $2)])
             (statement
                 [(decl SEMICOLON) $1]
                 [(return SEMICOLON) $1]
+                [(iter-assn SEMICOLON) $1]
                 [(if) $1]
                 [(loop) $1])
             (statement-list
                 [(statement) (list $1)]
-                [(statement statement-list) (cons (list $1) $2)])
+                [(statement statement-list) (cons $1 $2)])
             (type 
                 [(NUMTYPE) (Type "num")]
                 [(STRINGTYPE) (Type "string")]
@@ -118,12 +123,12 @@
                 [(type VAR) (Arg $1 $2 empty empty)]
                 [(type VAR range) (Arg $1 $2 $3 empty)]
                 [(NUMTYPE range VAR) (Arg (Type "num") $3 empty $2)]
-                [(NUMTYPE range VAR range) (Arg (Type "num") $3 $4 $2)]
+                [(NUMTYPE range LSQUARE RSQUARE range VAR) (Arg (Type "num[]") $6 $5 $2)]
                 [(STRINGTYPE range VAR) (Arg (Type "string") $3 empty $2)]
-                [(STRINGTYPE range VAR range) (Arg (Type "string") $3 $4 $2)])
+                [(STRINGTYPE range LSQUARE RSQUARE range VAR) (Arg (Type "string[]") $6 $5 $2)])
             (argslist
                 [(arg) (list $1)]
-                [(arg COMMA argslist) (cons (list $1) $3)])
+                [(arg COMMA argslist) (cons $1 $3)])
             (funcdecl
                 [(type range VAR LPAREN RPAREN LBRACE statement-list RBRACE)
                     (FuncDec $1 $3 empty $7 $2)]
@@ -152,10 +157,15 @@
                 [(VAR COLON iterator) (list (list $1 $3))]
                 [(VAR COLON iterator COMMA VAR COLON iterator) 
                     (cons (list $1 $3) (list $5 $7))])
+            (iter-assn 
+                [(VAR = expr) (IterAssn $1 $3)])
+            (iter-decl 
+                [(decl) $1]
+                [(type VAR) (Decl $1 $2 empty)])
             (loop
                 [(FOR LPAREN iterator-body RPAREN LBRACE statement-list RBRACE) 
                     (For $3 empty $6)]
-                [(FOR LPAREN iterator-body PIPE decl RPAREN LBRACE statement-list RBRACE)
+                [(FOR LPAREN iterator-body PIPE iter-decl RPAREN LBRACE statement-list RBRACE)
                     (For $3 $5 $8)])
             (binaryfn
                 [(ARR-CONCAT) ArrConcat]
@@ -172,6 +182,11 @@
                 [(STR-FIRST) StrFirst]
                 [(STON) StrToNum]
                 [(NTOS) NumToStr])
+            (userfn-argslist
+                [(expr) (list $1)]
+                [(expr COMMA userfn-argslist) (cons $1 $3)])
+            (userfn
+                [(VAR LPAREN userfn-argslist RPAREN) (UserFnCall $1 $3)])
             (expr 
                 [(expr OR expr) (Or $1 $3)]
                 [(expr AND expr) (And $1 $3)]
@@ -179,6 +194,8 @@
                 [(expr - expr) (Minus $1 $3)]
                 [(expr * expr) (Mult $1 $3)]
                 [(expr / expr) (Div $1 $3)]
+                [(! expr) (Not $2)]
+                [(userfn) $1]
                 [(unaryfn LPAREN expr RPAREN) ($1 $3)]
                 [(binaryfn LPAREN expr COMMA expr RPAREN) ($1 $3 $5)]
                 [(VAR) (Var $1)]
@@ -189,11 +206,10 @@
                 [(expr > expr) (Gt $1 $3)]
                 [(expr <= expr) (Lte $1 $3)]
                 [(expr >= expr) (Gte $1 $3)]
-                [(expr == expr) (Eq $1 $3)]
-                [(! expr) (Not $2)]))))
+                [(expr == expr) (Eq $1 $3)]))))
 ;; END PARSER
 
 
 ;; Testing
-(define (reader x) (lambda () (dsl-lexer (open-input-file x))))
 (define sample-file "samples/medium/array_average.sal")
+(define port (open-input-file sample-file))
