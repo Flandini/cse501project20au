@@ -24,7 +24,7 @@
     (var-name (:: (:or lower upper) (:* (:or lower upper digit "_" "-")))))
 
 (define dsl-lexer 
-    (lexer 
+    (lexer
         [(eof) 'EOF]
         [whitespace (dsl-lexer input-port)]
         ["," 'COMMA]
@@ -66,13 +66,21 @@
         [var-name (token-VAR lexeme)]))
 ;; END LEXER
 
+(define (error-handler tok-ok? tok-name tok-value)
+   (displayln
+      (format "Error at ~a~a" 
+              tok-name (if tok-value 
+                           (format " of val ~a" tok-value)
+                           ""))))
+
 ;; START PARSER
 (define dsl-parser
     (parser 
         (tokens op-tokens val-tokens)
-        (start program)
+        (start expr)
+        (debug "debug.out")
         (end EOF)
-        (error (lambda (tok-ok? tok-name tok-value) (displayln 'error)))
+        (error error-handler)
         (precs (left COMMA)
                (right =)
                (left OR)
@@ -184,3 +192,8 @@
                 [(expr == expr) (Eq $1 $3)]
                 [(! expr) (Not $2)]))))
 ;; END PARSER
+
+
+;; Testing
+(define (reader x) (lambda () (dsl-lexer (open-input-file x))))
+(define sample-file "samples/medium/array_average.sal")
