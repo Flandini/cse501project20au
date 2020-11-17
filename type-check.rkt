@@ -10,6 +10,14 @@
       (equal? t 'num)
       (equal? t 'numarray)
       (equal? t 'stringarray)))
+
+(define (type->proper-type type-node)
+  (match-let ([(Type type) type-node])
+    (if (string=? type "num[]")
+        'numarray
+        (if (string=? type "string[]")
+            'stringarray
+            type))))
       
 (define (unify t1 t2 h)
   (let ([x (find t1 h)]
@@ -23,6 +31,7 @@
         [(list t1 (? proper-type? t2)) (union t1 t2 h)]
         [_ (union t1 t2 h)]))))
 
+;; TODO: finish
 (define (type-check ast [store (make-hash)])
   ; don't type check these
   (match ast
@@ -40,6 +49,8 @@
       (unify 'num r store)
       (type-check l store)
       (type-check r store)]
+
+    [(Not expr) (unify 'num expr store)]
       
     ; String binops
     [(or (StrSplit l r) (StrEquals l r) (StrConcat l r) (StrAppend l r))
@@ -55,6 +66,11 @@
       (unify 'string val store)
       (type-check val store)]
 
+    [(Decl (Type type) var expr)
+      (unify (type->proper-type type) var store)
+      (unify (type->proper-type type) expr store)
+      (type-check expr store)]
+
     ; Array binops
     [(or (ArrEquals l r) (ArrAppend l r) (ArrConcat l r))
       (unify 'array ast store)
@@ -67,44 +83,19 @@
     [(or (ArrFirst val) (ArrLength val))
       (unify 'array ast store)
       (unify 'array val store)
-      (type-check val store)]))
-
-;;; (define (type-check ast [uf (make-hash)])
-;;;   (match ast
-;;;     ; don't typecheck these
-;;;     [(or (Var _) #f) void]
-
-;;;     [(Arg type (Var name) range)
-;;;      (unify type (Var name) uf)
-;;;      (unify type name uf)]
-     
-;;;     [(FuncDec type name args body)
-;;;      (unify type name uf) ;; Todo fix
-;;;      (if (func-last-statement ast)
-;;;          (begin
-;;;            (unless (Return? (func-last-statement ast))
-;;;              (raise (format "Function ~a must end with a return stmt" name)))
-;;;            (unify type (func-last-statement ast) uf))
-;;;          (raise "Function bodies cannot be empty"))
-;;;      (for ([arg args])
-;;;        (type-check arg uf))
-;;;      (for ([stmt body])
-;;;        (type-check stmt uf))]
-
-;;;     [(Assn l r)
-;;;      (unify l r uf)
-;;;      (type-check r uf)]
-       
-;;;     [(Decl type (Var x) expr)
-;;;      (unify type x uf)
-;;;      (unify x expr uf)
-;;;      (unify (Var x) type uf)
-;;;      (type-check expr uf)]
-
-;;;     [(Return expr)
-;;;      (unify ast expr uf)
-;;;      (type-check expr uf)]))
-
+      (type-check val store)]
+      
+    [(NumToStr val)
+      (unify 'num val store)]
+      
+    [(If cnd then els)
+      (unify 'num cnd store)
+      (type-check then store)
+      (type-check els store)]
+      
+    [(For iters decl body)
+      (type-check decl store)
+      (type-check body store)]))
 
 ;;; (module+ test
 ;;;   (require rackunit)

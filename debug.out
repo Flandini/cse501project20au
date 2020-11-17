@@ -69,12 +69,13 @@
 68	expr	=	(binaryfn LPAREN expr COMMA expr RPAREN)
 69	expr	=	(VAR)
 70	expr	=	(NUM)
-71	expr	=	(STR)
-72	compare	=	(expr < expr)
-73	compare	=	(expr > expr)
-74	compare	=	(expr <= expr)
-75	compare	=	(expr >= expr)
-76	compare	=	(expr == expr)
+71	expr	=	(LSQUARE RSQUARE)
+72	expr	=	(STR)
+73	compare	=	(expr < expr)
+74	compare	=	(expr > expr)
+75	compare	=	(expr <= expr)
+76	compare	=	(expr >= expr)
+77	compare	=	(expr == expr)
 State 0
 	g563 -> . g564 
 
@@ -478,37 +479,38 @@ State 49
 State 50
 	return -> RETURN . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
 	expr					goto	70
-	STR					shift	87
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 51
 	iter-assn -> VAR . = expr 
 
-	=					shift	88
+	=					shift	89
 
 State 52
 	arg -> NUMTYPE range LSQUARE . RSQUARE range VAR 
 
-	RSQUARE					shift	89
+	RSQUARE					shift	90
 
 State 53
 	arg -> NUMTYPE range VAR . 
@@ -519,7 +521,7 @@ State 53
 State 54
 	arg -> STRINGTYPE range LSQUARE . RSQUARE range VAR 
 
-	RSQUARE					shift	90
+	RSQUARE					shift	91
 
 State 55
 	arg -> STRINGTYPE range VAR . 
@@ -533,7 +535,7 @@ State 56
 	RETURN					shift	50
 	if					goto	45
 	decl					goto	43
-	statement-list					goto	91
+	statement-list					goto	92
 	NUMTYPE					shift	5
 	VAR					shift	51
 	NUMARRAYTYPE					shift	8
@@ -550,12 +552,12 @@ State 56
 State 57
 	funcdecl -> type range VAR LPAREN RPAREN LBRACE statement-list . RBRACE 
 
-	RBRACE					shift	92
+	RBRACE					shift	93
 
 State 58
 	funcdecl -> type VAR LPAREN argslist RPAREN LBRACE statement-list . RBRACE 
 
-	RBRACE					shift	93
+	RBRACE					shift	94
 
 State 59
 	statement-list -> statement statement-list . 
@@ -574,7 +576,7 @@ State 60
 State 61
 	decl -> type VAR . = expr 
 
-	=					shift	94
+	=					shift	95
 
 State 62
 	statement -> decl SEMICOLON . 
@@ -619,46 +621,47 @@ State 65
 	loop -> FOR LPAREN . iterator-body RPAREN LBRACE statement-list RBRACE 
 	loop -> FOR LPAREN . iterator-body PIPE iter-decl RPAREN LBRACE statement-list RBRACE 
 
-	iterator-body					goto	95
-	VAR					shift	96
+	iterator-body					goto	96
+	VAR					shift	97
 
 State 66
 	if -> IF LPAREN . conditional RPAREN LBRACE statement-list RBRACE 
 	if -> IF LPAREN . conditional RPAREN LBRACE statement-list RBRACE ELSE LBRACE statement-list RBRACE 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	98
-	STR					shift	87
+	expr					goto	99
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	VAR					shift	86
+	NTOS					shift	84
+	ARR-APPEND					shift	74
+	unaryfn					goto	68
+	STR-APPEND					shift	79
+	NUM					shift	87
+	conditional					goto	98
+	ARR-EQUALS?					shift	77
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
 	userfn					goto	69
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	NTOS					shift	83
-	STR-LENGTH					shift	79
-	STON					shift	82
-	VAR					shift	85
+	ARR-LENGTH					shift	75
+	STR-LENGTH					shift	80
+	STR					shift	88
 	!					shift	71
-	ARR-APPEND					shift	73
-	unaryfn					goto	68
-	compare					goto	99
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	conditional					goto	97
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	compare					goto	100
+	STR-FIRST					shift	81
+	ARR-CONCAT					shift	73
+	ARR-FIRST					shift	76
+	STON					shift	83
 
 State 67
 	expr -> binaryfn . LPAREN expr COMMA expr RPAREN 
 
-	LPAREN					shift	100
+	LPAREN					shift	101
 
 State 68
 	expr -> unaryfn . LPAREN expr RPAREN 
 
-	LPAREN					shift	101
+	LPAREN					shift	102
 
 State 69
 	expr -> userfn . 
@@ -687,105 +690,111 @@ State 70
 	expr -> expr . * expr 
 	expr -> expr . / expr 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	/					shift	104
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	/					shift	105
 	SEMICOLON					reduce	29
-	-					shift	103
+	-					shift	104
 
 State 71
 	expr -> ! . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	108
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	109
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 72
+	expr -> LSQUARE . RSQUARE 
+
+	RSQUARE					shift	110
+
+State 73
 	binaryfn -> ARR-CONCAT . 
 
 	LPAREN					reduce	43
 
-State 73
+State 74
 	binaryfn -> ARR-APPEND . 
 
 	LPAREN					reduce	44
 
-State 74
+State 75
 	unaryfn -> ARR-LENGTH . 
 
 	LPAREN					reduce	50
 
-State 75
+State 76
 	unaryfn -> ARR-FIRST . 
 
 	LPAREN					reduce	51
 
-State 76
+State 77
 	binaryfn -> ARR-EQUALS? . 
 
 	LPAREN					reduce	45
 
-State 77
+State 78
 	binaryfn -> STR-CONCAT . 
 
 	LPAREN					reduce	46
 
-State 78
+State 79
 	binaryfn -> STR-APPEND . 
 
 	LPAREN					reduce	47
 
-State 79
+State 80
 	unaryfn -> STR-LENGTH . 
 
 	LPAREN					reduce	52
 
-State 80
+State 81
 	unaryfn -> STR-FIRST . 
 
 	LPAREN					reduce	53
 
-State 81
+State 82
 	binaryfn -> STR-EQUALS? . 
 
 	LPAREN					reduce	48
 
-State 82
+State 83
 	unaryfn -> STON . 
 
 	LPAREN					reduce	54
 
-State 83
+State 84
 	unaryfn -> NTOS . 
 
 	LPAREN					reduce	55
 
-State 84
+State 85
 	binaryfn -> STR-SPLIT . 
 
 	LPAREN					reduce	49
 
-State 85
+State 86
 	userfn -> VAR . LPAREN userfn-argslist RPAREN 
 	expr -> VAR . 
 
@@ -797,7 +806,7 @@ State 85
 	/					reduce	69
 	SEMICOLON					reduce	69
 	-					reduce	69
-	LPAREN					shift	109
+	LPAREN					shift	111
 	COMMA					reduce	69
 	*					reduce	69
 	==					reduce	69
@@ -805,7 +814,7 @@ State 85
 	>					reduce	69
 	<					reduce	69
 
-State 86
+State 87
 	expr -> NUM . 
 
 	<=					reduce	70
@@ -823,67 +832,68 @@ State 86
 	>					reduce	70
 	<					reduce	70
 
-State 87
+State 88
 	expr -> STR . 
 
-	<=					reduce	71
-	>=					reduce	71
-	+					reduce	71
-	OR					reduce	71
-	RPAREN					reduce	71
-	/					reduce	71
-	SEMICOLON					reduce	71
-	-					reduce	71
-	COMMA					reduce	71
-	*					reduce	71
-	==					reduce	71
-	AND					reduce	71
-	>					reduce	71
-	<					reduce	71
-
-State 88
-	iter-assn -> VAR = . expr 
-
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	110
-	STR					shift	87
-	userfn					goto	69
-	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
-	!					shift	71
-	ARR-APPEND					shift	73
-	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	<=					reduce	72
+	>=					reduce	72
+	+					reduce	72
+	OR					reduce	72
+	RPAREN					reduce	72
+	/					reduce	72
+	SEMICOLON					reduce	72
+	-					reduce	72
+	COMMA					reduce	72
+	*					reduce	72
+	==					reduce	72
+	AND					reduce	72
+	>					reduce	72
+	<					reduce	72
 
 State 89
+	iter-assn -> VAR = . expr 
+
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	112
+	STR					shift	88
+	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
+	binaryfn					goto	67
+	!					shift	71
+	ARR-APPEND					shift	74
+	unaryfn					goto	68
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
+
+State 90
 	arg -> NUMTYPE range LSQUARE RSQUARE . range VAR 
 
 	LBRACE					shift	11
-	range					goto	111
+	range					goto	113
 
-State 90
+State 91
 	arg -> STRINGTYPE range LSQUARE RSQUARE . range VAR 
 
 	LBRACE					shift	11
-	range					goto	112
-
-State 91
-	funcdecl -> type range VAR LPAREN argslist RPAREN LBRACE statement-list . RBRACE 
-
-	RBRACE					shift	113
+	range					goto	114
 
 State 92
+	funcdecl -> type range VAR LPAREN argslist RPAREN LBRACE statement-list . RBRACE 
+
+	RBRACE					shift	115
+
+State 93
 	funcdecl -> type range VAR LPAREN RPAREN LBRACE statement-list RBRACE . 
 
 	STRINGARRAYTYPE					reduce	24
@@ -892,7 +902,7 @@ State 92
 	NUMTYPE					reduce	24
 	NUMARRAYTYPE					reduce	24
 
-State 93
+State 94
 	funcdecl -> type VAR LPAREN argslist RPAREN LBRACE statement-list RBRACE . 
 
 	STRINGARRAYTYPE					reduce	27
@@ -901,51 +911,52 @@ State 93
 	NUMTYPE					reduce	27
 	NUMARRAYTYPE					reduce	27
 
-State 94
+State 95
 	decl -> type VAR = . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	114
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	116
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
-State 95
+State 96
 	loop -> FOR LPAREN iterator-body . RPAREN LBRACE statement-list RBRACE 
 	loop -> FOR LPAREN iterator-body . PIPE iter-decl RPAREN LBRACE statement-list RBRACE 
 
-	RPAREN					shift	115
-	PIPE					shift	116
+	RPAREN					shift	117
+	PIPE					shift	118
 
-State 96
+State 97
 	iterator-body -> VAR . COLON iterator 
 	iterator-body -> VAR . COLON iterator COMMA VAR COLON iterator 
 
-	COLON					shift	117
+	COLON					shift	119
 
-State 97
+State 98
 	if -> IF LPAREN conditional . RPAREN LBRACE statement-list RBRACE 
 	if -> IF LPAREN conditional . RPAREN LBRACE statement-list RBRACE ELSE LBRACE statement-list RBRACE 
 
-	RPAREN					shift	118
+	RPAREN					shift	120
 
-State 98
+State 99
 	conditional -> expr . 
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
@@ -959,225 +970,233 @@ State 98
 	compare -> expr . >= expr 
 	compare -> expr . == expr 
 
-	-					shift	103
-	AND					shift	106
-	>=					shift	120
-	+					shift	102
-	*					shift	105
-	==					shift	123
+	-					shift	104
+	AND					shift	107
+	>=					shift	122
+	+					shift	103
+	*					shift	106
+	==					shift	125
 	RPAREN					reduce	31
-	/					shift	104
-	<=					shift	122
-	OR					shift	107
-	>					shift	119
-	<					shift	121
+	/					shift	105
+	<=					shift	124
+	OR					shift	108
+	>					shift	121
+	<					shift	123
 
-State 99
+State 100
 	conditional -> compare . 
 
 	RPAREN					reduce	30
 
-State 100
+State 101
 	expr -> binaryfn LPAREN . expr COMMA expr RPAREN 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	124
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	126
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
-
-State 101
-	expr -> unaryfn LPAREN . expr RPAREN 
-
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	125
-	STR					shift	87
-	userfn					goto	69
-	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
-	!					shift	71
-	ARR-APPEND					shift	73
-	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 102
-	expr -> expr + . expr 
+	expr -> unaryfn LPAREN . expr RPAREN 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	126
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	127
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 103
-	expr -> expr - . expr 
+	expr -> expr + . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	127
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	128
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 104
-	expr -> expr / . expr 
+	expr -> expr - . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	128
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	129
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 105
-	expr -> expr * . expr 
+	expr -> expr / . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	129
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	130
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 106
-	expr -> expr AND . expr 
+	expr -> expr * . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	130
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	131
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 107
-	expr -> expr OR . expr 
+	expr -> expr AND . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	131
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	132
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 108
+	expr -> expr OR . expr 
+
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	133
+	STR					shift	88
+	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
+	binaryfn					goto	67
+	!					shift	71
+	ARR-APPEND					shift	74
+	unaryfn					goto	68
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
+
+State 109
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1201,33 +1220,52 @@ State 108
 	>					reduce	65
 	<					reduce	65
 
-State 109
+State 110
+	expr -> LSQUARE RSQUARE . 
+
+	<=					reduce	71
+	>=					reduce	71
+	+					reduce	71
+	OR					reduce	71
+	RPAREN					reduce	71
+	/					reduce	71
+	SEMICOLON					reduce	71
+	-					reduce	71
+	COMMA					reduce	71
+	*					reduce	71
+	==					reduce	71
+	AND					reduce	71
+	>					reduce	71
+	<					reduce	71
+
+State 111
 	userfn -> VAR LPAREN . userfn-argslist RPAREN 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	ARR-LENGTH					shift	74
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
 	binaryfn					goto	67
-	STR-LENGTH					shift	79
-	userfn-argslist					goto	132
-	VAR					shift	85
-	expr					goto	133
-	NTOS					shift	83
+	STR-LENGTH					shift	80
+	userfn-argslist					goto	134
+	VAR					shift	86
+	expr					goto	135
+	NTOS					shift	84
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	STR-SPLIT					shift	85
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
-State 110
+State 112
 	iter-assn -> VAR = expr . 
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
@@ -1236,25 +1274,25 @@ State 110
 	expr -> expr . * expr 
 	expr -> expr . / expr 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	/					shift	104
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	/					shift	105
 	SEMICOLON					reduce	38
-	-					shift	103
-
-State 111
-	arg -> NUMTYPE range LSQUARE RSQUARE range . VAR 
-
-	VAR					shift	134
-
-State 112
-	arg -> STRINGTYPE range LSQUARE RSQUARE range . VAR 
-
-	VAR					shift	135
+	-					shift	104
 
 State 113
+	arg -> NUMTYPE range LSQUARE RSQUARE range . VAR 
+
+	VAR					shift	136
+
+State 114
+	arg -> STRINGTYPE range LSQUARE RSQUARE range . VAR 
+
+	VAR					shift	137
+
+State 115
 	funcdecl -> type range VAR LPAREN argslist RPAREN LBRACE statement-list RBRACE . 
 
 	STRINGARRAYTYPE					reduce	26
@@ -1263,7 +1301,7 @@ State 113
 	NUMTYPE					reduce	26
 	NUMARRAYTYPE					reduce	26
 
-State 114
+State 116
 	decl -> type VAR = expr . 
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
@@ -1272,171 +1310,176 @@ State 114
 	expr -> expr . * expr 
 	expr -> expr . / expr 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
 	RPAREN					reduce	28
-	/					shift	104
+	/					shift	105
 	SEMICOLON					reduce	28
-	-					shift	103
+	-					shift	104
 
-State 115
+State 117
 	loop -> FOR LPAREN iterator-body RPAREN . LBRACE statement-list RBRACE 
 
-	LBRACE					shift	136
+	LBRACE					shift	138
 
-State 116
+State 118
 	loop -> FOR LPAREN iterator-body PIPE . iter-decl RPAREN LBRACE statement-list RBRACE 
 
 	STRINGARRAYTYPE					shift	7
 	STRINGTYPE					shift	6
-	type					goto	137
-	iter-decl					goto	139
-	decl					goto	138
+	type					goto	139
+	iter-decl					goto	141
+	decl					goto	140
 	NUMTYPE					shift	5
 	NUMARRAYTYPE					shift	8
 
-State 117
+State 119
 	iterator-body -> VAR COLON . iterator 
 	iterator-body -> VAR COLON . iterator COMMA VAR COLON iterator 
 
-	iterator					goto	140
-	NUM					shift	142
-	VAR					shift	141
+	iterator					goto	142
+	NUM					shift	144
+	VAR					shift	143
 
-State 118
+State 120
 	if -> IF LPAREN conditional RPAREN . LBRACE statement-list RBRACE 
 	if -> IF LPAREN conditional RPAREN . LBRACE statement-list RBRACE ELSE LBRACE statement-list RBRACE 
 
-	LBRACE					shift	143
-
-State 119
-	compare -> expr > . expr 
-
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	144
-	STR					shift	87
-	userfn					goto	69
-	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
-	!					shift	71
-	ARR-APPEND					shift	73
-	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
-
-State 120
-	compare -> expr >= . expr 
-
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	145
-	STR					shift	87
-	userfn					goto	69
-	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
-	!					shift	71
-	ARR-APPEND					shift	73
-	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	LBRACE					shift	145
 
 State 121
-	compare -> expr < . expr 
+	compare -> expr > . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
 	expr					goto	146
-	STR					shift	87
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 122
-	compare -> expr <= . expr 
+	compare -> expr >= . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
 	expr					goto	147
-	STR					shift	87
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 123
-	compare -> expr == . expr 
+	compare -> expr < . expr 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
 	expr					goto	148
-	STR					shift	87
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
 	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
 State 124
+	compare -> expr <= . expr 
+
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	149
+	STR					shift	88
+	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
+	binaryfn					goto	67
+	!					shift	71
+	ARR-APPEND					shift	74
+	unaryfn					goto	68
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
+
+State 125
+	compare -> expr == . expr 
+
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	150
+	STR					shift	88
+	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
+	binaryfn					goto	67
+	!					shift	71
+	ARR-APPEND					shift	74
+	unaryfn					goto	68
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
+
+State 126
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1445,15 +1488,15 @@ State 124
 	expr -> expr . / expr 
 	expr -> binaryfn LPAREN expr . COMMA expr RPAREN 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	/					shift	104
-	COMMA					shift	149
-	-					shift	103
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	/					shift	105
+	COMMA					shift	151
+	-					shift	104
 
-State 125
+State 127
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1462,15 +1505,15 @@ State 125
 	expr -> expr . / expr 
 	expr -> unaryfn LPAREN expr . RPAREN 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	RPAREN					shift	150
-	/					shift	104
-	-					shift	103
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	RPAREN					shift	152
+	/					shift	105
+	-					shift	104
 
-State 126
+State 128
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1484,17 +1527,17 @@ State 126
 	+					reduce	61
 	OR					reduce	61
 	RPAREN					reduce	61
-	/					shift	104
+	/					shift	105
 	SEMICOLON					reduce	61
 	-					reduce	61
 	COMMA					reduce	61
-	*					shift	105
+	*					shift	106
 	==					reduce	61
 	AND					reduce	61
 	>					reduce	61
 	<					reduce	61
 
-State 127
+State 129
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1508,17 +1551,17 @@ State 127
 	+					reduce	62
 	OR					reduce	62
 	RPAREN					reduce	62
-	/					shift	104
+	/					shift	105
 	SEMICOLON					reduce	62
 	-					reduce	62
 	COMMA					reduce	62
-	*					shift	105
+	*					shift	106
 	==					reduce	62
 	AND					reduce	62
 	>					reduce	62
 	<					reduce	62
 
-State 128
+State 130
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1542,7 +1585,7 @@ State 128
 	>					reduce	64
 	<					reduce	64
 
-State 129
+State 131
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1566,7 +1609,7 @@ State 129
 	>					reduce	63
 	<					reduce	63
 
-State 130
+State 132
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr AND expr . 
@@ -1577,20 +1620,20 @@ State 130
 
 	<=					reduce	60
 	>=					reduce	60
-	+					shift	102
+	+					shift	103
 	OR					reduce	60
 	RPAREN					reduce	60
-	/					shift	104
+	/					shift	105
 	SEMICOLON					reduce	60
-	-					shift	103
+	-					shift	104
 	COMMA					reduce	60
-	*					shift	105
+	*					shift	106
 	==					reduce	60
 	AND					reduce	60
 	>					reduce	60
 	<					reduce	60
 
-State 131
+State 133
 	expr -> expr . OR expr 
 	expr -> expr OR expr . 
 	expr -> expr . AND expr 
@@ -1601,25 +1644,25 @@ State 131
 
 	<=					reduce	59
 	>=					reduce	59
-	+					shift	102
+	+					shift	103
 	OR					reduce	59
 	RPAREN					reduce	59
-	/					shift	104
+	/					shift	105
 	SEMICOLON					reduce	59
-	-					shift	103
+	-					shift	104
 	COMMA					reduce	59
-	*					shift	105
+	*					shift	106
 	==					reduce	59
-	AND					shift	106
+	AND					shift	107
 	>					reduce	59
 	<					reduce	59
 
-State 132
+State 134
 	userfn -> VAR LPAREN userfn-argslist . RPAREN 
 
-	RPAREN					shift	151
+	RPAREN					shift	153
 
-State 133
+State 135
 	userfn-argslist -> expr . 
 	userfn-argslist -> expr . COMMA userfn-argslist 
 	expr -> expr . OR expr 
@@ -1629,34 +1672,34 @@ State 133
 	expr -> expr . * expr 
 	expr -> expr . / expr 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
 	RPAREN					reduce	56
-	/					shift	104
-	COMMA					shift	152
-	-					shift	103
+	/					shift	105
+	COMMA					shift	154
+	-					shift	104
 
-State 134
+State 136
 	arg -> NUMTYPE range LSQUARE RSQUARE range VAR . 
 
 	RPAREN					reduce	19
 	COMMA					reduce	19
 
-State 135
+State 137
 	arg -> STRINGTYPE range LSQUARE RSQUARE range VAR . 
 
 	RPAREN					reduce	21
 	COMMA					reduce	21
 
-State 136
+State 138
 	loop -> FOR LPAREN iterator-body RPAREN LBRACE . statement-list RBRACE 
 
 	RETURN					shift	50
 	if					goto	45
 	decl					goto	43
-	statement-list					goto	153
+	statement-list					goto	155
 	NUMTYPE					shift	5
 	VAR					shift	51
 	NUMARRAYTYPE					shift	8
@@ -1670,52 +1713,52 @@ State 136
 	FOR					shift	48
 	statement					goto	40
 
-State 137
+State 139
 	decl -> type . VAR = expr 
 	iter-decl -> type . VAR 
 
-	VAR					shift	154
+	VAR					shift	156
 
-State 138
+State 140
 	iter-decl -> decl . 
 
 	RPAREN					reduce	39
 
-State 139
+State 141
 	loop -> FOR LPAREN iterator-body PIPE iter-decl . RPAREN LBRACE statement-list RBRACE 
 
-	RPAREN					shift	155
+	RPAREN					shift	157
 
-State 140
+State 142
 	iterator-body -> VAR COLON iterator . 
 	iterator-body -> VAR COLON iterator . COMMA VAR COLON iterator 
 
 	RPAREN					reduce	36
 	PIPE					reduce	36
-	COMMA					shift	156
+	COMMA					shift	158
 
-State 141
+State 143
 	iterator -> VAR . 
 
 	RPAREN					reduce	34
 	PIPE					reduce	34
 	COMMA					reduce	34
 
-State 142
+State 144
 	iterator -> NUM . 
 
 	RPAREN					reduce	35
 	PIPE					reduce	35
 	COMMA					reduce	35
 
-State 143
+State 145
 	if -> IF LPAREN conditional RPAREN LBRACE . statement-list RBRACE 
 	if -> IF LPAREN conditional RPAREN LBRACE . statement-list RBRACE ELSE LBRACE statement-list RBRACE 
 
 	RETURN					shift	50
 	if					goto	45
 	decl					goto	43
-	statement-list					goto	157
+	statement-list					goto	159
 	NUMTYPE					shift	5
 	VAR					shift	51
 	NUMARRAYTYPE					shift	8
@@ -1728,40 +1771,6 @@ State 143
 	iter-assn					goto	46
 	FOR					shift	48
 	statement					goto	40
-
-State 144
-	expr -> expr . OR expr 
-	expr -> expr . AND expr 
-	expr -> expr . + expr 
-	expr -> expr . - expr 
-	expr -> expr . * expr 
-	expr -> expr . / expr 
-	compare -> expr > expr . 
-
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	RPAREN					reduce	73
-	/					shift	104
-	-					shift	103
-
-State 145
-	expr -> expr . OR expr 
-	expr -> expr . AND expr 
-	expr -> expr . + expr 
-	expr -> expr . - expr 
-	expr -> expr . * expr 
-	expr -> expr . / expr 
-	compare -> expr >= expr . 
-
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	RPAREN					reduce	75
-	/					shift	104
-	-					shift	103
 
 State 146
 	expr -> expr . OR expr 
@@ -1770,15 +1779,15 @@ State 146
 	expr -> expr . - expr 
 	expr -> expr . * expr 
 	expr -> expr . / expr 
-	compare -> expr < expr . 
+	compare -> expr > expr . 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	RPAREN					reduce	72
-	/					shift	104
-	-					shift	103
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	RPAREN					reduce	74
+	/					shift	105
+	-					shift	104
 
 State 147
 	expr -> expr . OR expr 
@@ -1787,15 +1796,15 @@ State 147
 	expr -> expr . - expr 
 	expr -> expr . * expr 
 	expr -> expr . / expr 
-	compare -> expr <= expr . 
+	compare -> expr >= expr . 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	RPAREN					reduce	74
-	/					shift	104
-	-					shift	103
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	RPAREN					reduce	76
+	/					shift	105
+	-					shift	104
 
 State 148
 	expr -> expr . OR expr 
@@ -1804,42 +1813,77 @@ State 148
 	expr -> expr . - expr 
 	expr -> expr . * expr 
 	expr -> expr . / expr 
-	compare -> expr == expr . 
+	compare -> expr < expr . 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	RPAREN					reduce	76
-	/					shift	104
-	-					shift	103
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	RPAREN					reduce	73
+	/					shift	105
+	-					shift	104
 
 State 149
-	expr -> binaryfn LPAREN expr COMMA . expr RPAREN 
+	expr -> expr . OR expr 
+	expr -> expr . AND expr 
+	expr -> expr . + expr 
+	expr -> expr . - expr 
+	expr -> expr . * expr 
+	expr -> expr . / expr 
+	compare -> expr <= expr . 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	expr					goto	158
-	STR					shift	87
-	userfn					goto	69
-	binaryfn					goto	67
-	ARR-LENGTH					shift	74
-	VAR					shift	85
-	STR-LENGTH					shift	79
-	NTOS					shift	83
-	!					shift	71
-	ARR-APPEND					shift	73
-	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	RPAREN					reduce	75
+	/					shift	105
+	-					shift	104
 
 State 150
+	expr -> expr . OR expr 
+	expr -> expr . AND expr 
+	expr -> expr . + expr 
+	expr -> expr . - expr 
+	expr -> expr . * expr 
+	expr -> expr . / expr 
+	compare -> expr == expr . 
+
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	RPAREN					reduce	77
+	/					shift	105
+	-					shift	104
+
+State 151
+	expr -> binaryfn LPAREN expr COMMA . expr RPAREN 
+
+	STR-EQUALS?					shift	82
+	STR-SPLIT					shift	85
+	expr					goto	160
+	STR					shift	88
+	userfn					goto	69
+	LSQUARE					shift	72
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	VAR					shift	86
+	STR-LENGTH					shift	80
+	NTOS					shift	84
+	binaryfn					goto	67
+	!					shift	71
+	ARR-APPEND					shift	74
+	unaryfn					goto	68
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
+
+State 152
 	expr -> unaryfn LPAREN expr RPAREN . 
 
 	<=					reduce	67
@@ -1857,7 +1901,7 @@ State 150
 	>					reduce	67
 	<					reduce	67
 
-State 151
+State 153
 	userfn -> VAR LPAREN userfn-argslist RPAREN . 
 
 	<=					reduce	58
@@ -1875,61 +1919,62 @@ State 151
 	>					reduce	58
 	<					reduce	58
 
-State 152
+State 154
 	userfn-argslist -> expr COMMA . userfn-argslist 
 
-	STR-EQUALS?					shift	81
-	STR-CONCAT					shift	77
-	ARR-LENGTH					shift	74
-	STR					shift	87
+	STR-EQUALS?					shift	82
+	STR-CONCAT					shift	78
+	ARR-LENGTH					shift	75
+	STR					shift	88
 	userfn					goto	69
+	LSQUARE					shift	72
 	binaryfn					goto	67
-	STR-LENGTH					shift	79
-	userfn-argslist					goto	159
-	VAR					shift	85
-	expr					goto	133
-	NTOS					shift	83
+	STR-LENGTH					shift	80
+	userfn-argslist					goto	161
+	VAR					shift	86
+	expr					goto	135
+	NTOS					shift	84
 	!					shift	71
-	ARR-APPEND					shift	73
+	ARR-APPEND					shift	74
 	unaryfn					goto	68
-	STR-FIRST					shift	80
-	STR-APPEND					shift	78
-	NUM					shift	86
-	ARR-CONCAT					shift	72
-	STON					shift	82
-	STR-SPLIT					shift	84
-	ARR-FIRST					shift	75
-	ARR-EQUALS?					shift	76
+	STR-FIRST					shift	81
+	STR-APPEND					shift	79
+	NUM					shift	87
+	ARR-CONCAT					shift	73
+	STON					shift	83
+	STR-SPLIT					shift	85
+	ARR-FIRST					shift	76
+	ARR-EQUALS?					shift	77
 
-State 153
+State 155
 	loop -> FOR LPAREN iterator-body RPAREN LBRACE statement-list . RBRACE 
 
-	RBRACE					shift	160
+	RBRACE					shift	162
 
-State 154
+State 156
 	decl -> type VAR . = expr 
 	iter-decl -> type VAR . 
 
 	RPAREN					reduce	40
-	=					shift	94
-
-State 155
-	loop -> FOR LPAREN iterator-body PIPE iter-decl RPAREN . LBRACE statement-list RBRACE 
-
-	LBRACE					shift	161
-
-State 156
-	iterator-body -> VAR COLON iterator COMMA . VAR COLON iterator 
-
-	VAR					shift	162
+	=					shift	95
 
 State 157
+	loop -> FOR LPAREN iterator-body PIPE iter-decl RPAREN . LBRACE statement-list RBRACE 
+
+	LBRACE					shift	163
+
+State 158
+	iterator-body -> VAR COLON iterator COMMA . VAR COLON iterator 
+
+	VAR					shift	164
+
+State 159
 	if -> IF LPAREN conditional RPAREN LBRACE statement-list . RBRACE 
 	if -> IF LPAREN conditional RPAREN LBRACE statement-list . RBRACE ELSE LBRACE statement-list RBRACE 
 
-	RBRACE					shift	163
+	RBRACE					shift	165
 
-State 158
+State 160
 	expr -> expr . OR expr 
 	expr -> expr . AND expr 
 	expr -> expr . + expr 
@@ -1938,20 +1983,20 @@ State 158
 	expr -> expr . / expr 
 	expr -> binaryfn LPAREN expr COMMA expr . RPAREN 
 
-	AND					shift	106
-	OR					shift	107
-	+					shift	102
-	*					shift	105
-	RPAREN					shift	164
-	/					shift	104
-	-					shift	103
+	AND					shift	107
+	OR					shift	108
+	+					shift	103
+	*					shift	106
+	RPAREN					shift	166
+	/					shift	105
+	-					shift	104
 
-State 159
+State 161
 	userfn-argslist -> expr COMMA userfn-argslist . 
 
 	RPAREN					reduce	57
 
-State 160
+State 162
 	loop -> FOR LPAREN iterator-body RPAREN LBRACE statement-list RBRACE . 
 
 	STRINGARRAYTYPE					reduce	41
@@ -1964,13 +2009,13 @@ State 160
 	VAR					reduce	41
 	NUMARRAYTYPE					reduce	41
 
-State 161
+State 163
 	loop -> FOR LPAREN iterator-body PIPE iter-decl RPAREN LBRACE . statement-list RBRACE 
 
 	RETURN					shift	50
 	if					goto	45
 	decl					goto	43
-	statement-list					goto	165
+	statement-list					goto	167
 	NUMTYPE					shift	5
 	VAR					shift	51
 	NUMARRAYTYPE					shift	8
@@ -1984,12 +2029,12 @@ State 161
 	FOR					shift	48
 	statement					goto	40
 
-State 162
+State 164
 	iterator-body -> VAR COLON iterator COMMA VAR . COLON iterator 
 
-	COLON					shift	166
+	COLON					shift	168
 
-State 163
+State 165
 	if -> IF LPAREN conditional RPAREN LBRACE statement-list RBRACE . 
 	if -> IF LPAREN conditional RPAREN LBRACE statement-list RBRACE . ELSE LBRACE statement-list RBRACE 
 
@@ -1997,14 +2042,14 @@ State 163
 	STRINGTYPE					reduce	32
 	RETURN					reduce	32
 	FOR					reduce	32
-	ELSE					shift	167
+	ELSE					shift	169
 	RBRACE					reduce	32
 	IF					reduce	32
 	NUMTYPE					reduce	32
 	VAR					reduce	32
 	NUMARRAYTYPE					reduce	32
 
-State 164
+State 166
 	expr -> binaryfn LPAREN expr COMMA expr RPAREN . 
 
 	<=					reduce	68
@@ -2022,24 +2067,24 @@ State 164
 	>					reduce	68
 	<					reduce	68
 
-State 165
+State 167
 	loop -> FOR LPAREN iterator-body PIPE iter-decl RPAREN LBRACE statement-list . RBRACE 
 
-	RBRACE					shift	168
-
-State 166
-	iterator-body -> VAR COLON iterator COMMA VAR COLON . iterator 
-
-	iterator					goto	169
-	NUM					shift	142
-	VAR					shift	141
-
-State 167
-	if -> IF LPAREN conditional RPAREN LBRACE statement-list RBRACE ELSE . LBRACE statement-list RBRACE 
-
-	LBRACE					shift	170
+	RBRACE					shift	170
 
 State 168
+	iterator-body -> VAR COLON iterator COMMA VAR COLON . iterator 
+
+	iterator					goto	171
+	NUM					shift	144
+	VAR					shift	143
+
+State 169
+	if -> IF LPAREN conditional RPAREN LBRACE statement-list RBRACE ELSE . LBRACE statement-list RBRACE 
+
+	LBRACE					shift	172
+
+State 170
 	loop -> FOR LPAREN iterator-body PIPE iter-decl RPAREN LBRACE statement-list RBRACE . 
 
 	STRINGARRAYTYPE					reduce	42
@@ -2052,19 +2097,19 @@ State 168
 	VAR					reduce	42
 	NUMARRAYTYPE					reduce	42
 
-State 169
+State 171
 	iterator-body -> VAR COLON iterator COMMA VAR COLON iterator . 
 
 	RPAREN					reduce	37
 	PIPE					reduce	37
 
-State 170
+State 172
 	if -> IF LPAREN conditional RPAREN LBRACE statement-list RBRACE ELSE LBRACE . statement-list RBRACE 
 
 	RETURN					shift	50
 	if					goto	45
 	decl					goto	43
-	statement-list					goto	171
+	statement-list					goto	173
 	NUMTYPE					shift	5
 	VAR					shift	51
 	NUMARRAYTYPE					shift	8
@@ -2078,12 +2123,12 @@ State 170
 	FOR					shift	48
 	statement					goto	40
 
-State 171
+State 173
 	if -> IF LPAREN conditional RPAREN LBRACE statement-list RBRACE ELSE LBRACE statement-list . RBRACE 
 
-	RBRACE					shift	172
+	RBRACE					shift	174
 
-State 172
+State 174
 	if -> IF LPAREN conditional RPAREN LBRACE statement-list RBRACE ELSE LBRACE statement-list RBRACE . 
 
 	STRINGARRAYTYPE					reduce	33

@@ -200,7 +200,6 @@
                 [(binaryfn LPAREN expr COMMA expr RPAREN) ($1 $3 $5)]
                 [(VAR) (Var $1)]
                 [(NUM) (Num $1)]
-                [(LSQUARE RSQUARE) (Array empty)]
                 [(STR) (String $1)])
             (compare
                 [(expr < expr) (Lt $1 $3)]
