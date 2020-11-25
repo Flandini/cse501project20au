@@ -8,16 +8,18 @@
 (define (proper-type? t)
   (or (equal? t 'string)
       (equal? t 'num)
-      (equal? t 'numarray)
-      (equal? t 'stringarray)))
+      (equal? t 'num_iter)
+      (equal? t 'string_iter)
+      (equal? t 'iter)))
 
-(define (type->proper-type type-node)
-  (match-let ([(Type type) type-node])
-    (if (string=? type "num[]")
-        'numarray
-        (if (string=? type "string[]")
-            'stringarray
-            type))))
+(define (proper-type=? t1 t2)
+  (match (list t1 t2)
+    [(list 'num_iter 'iter) #t]
+    [(list 'string_iter 'iter) #t]
+    [(list 'iter 'num_iter) #t]
+    [(list 'iter 'string_iter) #t]
+    [(list 'iter 'iter) #t]
+    [_ (equal? t1 t2)]))
       
 (define (unify t1 t2 h)
   (let ([x (find t1 h)]
@@ -25,7 +27,7 @@
     (when (not (equal? x y))
       (match (list x y)
         [(list (? proper-type? t1) (? proper-type? t2))
-         (unless (equal? t1 t2)
+         (unless (proper-type=? t1 t2)
            (error 'typechecking "Failed type checking"))] ;; TODO: More informative error message
         [(list (? proper-type? t1) t2) (union t2 t1 h)]
         [(list t1 (? proper-type? t2)) (union t1 t2 h)]
@@ -36,6 +38,10 @@
   ; don't type check these
   (match ast
     [(or (Var _) #f) void]
+
+    ;; TODO: Program/Top level functions
+    [(? list?) (for ([function ast])
+                  (type-check function store))]
 
     ; primitives
     [(String x) (unify 'string ast store)]
@@ -61,130 +67,37 @@
       (type-check r store)]
       
     ; String unops
-    [(or (StrFirst val) (StrToNum val) (StrLength val))
+    [(or (StrToNum val) (StrLength val))
       (unify 'string ast store)
       (unify 'string val store)
       (type-check val store)]
 
     [(Decl (Type type) var expr)
-      (unify (type->proper-type type) var store)
-      (unify (type->proper-type type) expr store)
-      (type-check expr store)]
+      (unify type var store)
+      (unless (empty? expr)
+        (unify type expr store)
+        (type-check expr store))]
 
-    ; Array binops
-    [(or (ArrEquals l r) (ArrAppend l r) (ArrConcat l r))
-      (unify 'array ast store)
-      (unify 'array l store)
-      (unify 'array r store)
-      (type-check l store)
-      (type-check r store)]
-      
-    ; Array unops
-    [(or (ArrFirst val) (ArrLength val))
-      (unify 'array ast store)
-      (unify 'array val store)
-      (type-check val store)]
-      
     [(NumToStr val)
       (unify 'num val store)]
       
     [(If cnd then els)
       (unify 'num cnd store)
+      (type-check cnd store)
       (type-check then store)
       (type-check els store)]
-      
+    
+    ;; TODO
     [(For iters decl body)
+      (unless (<= (length iters) 2)
+        (error "Only up to 2 iterators are allowed in a for loop"))
+      ;(for ([iter iters]))
       (type-check decl store)
       (type-check body store)]
       
     [_ void]))
 
-;;; (module+ test
-;;;   (require rackunit)
-;;;   (require "ast.rkt")
-
-;;;   (test-case "constants"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (Const 4)])
-;;;                (type-check ast dict)
-;;;                (check-equal?
-;;;                 (find ast dict)
-;;;                 (NumType))
-;;;                (check-equal?
-;;;                 (find 4 dict)
-;;;                 (NumType))))
-
-;;;   (test-case "arg"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (Arg (StringType) (Var 'x) empty)])
-;;;                (type-check ast dict)
-;;;                (check-equal?
-;;;                 (find 'x dict)
-;;;                 (StringType))
-;;;                (check-equal?
-;;;                 (find (Var 'x) dict)
-;;;                 (StringType))))
-
-;;;   (test-case "decl"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (Decl (NumType) (Var 'z) (Const 4))])
-;;;                (type-check ast dict)
-;;;                (check-equal? (find 'z dict) (NumType))
-;;;                (check-equal? (find 4 dict) (NumType))
-;;;                (check-equal? (find (Const 4) dict) (NumType))))
-
-;;;   (test-case "simple arith expr"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (Add (Const 4) (Var 'x))])
-;;;                (type-check ast dict)
-;;;                (check-equal? (find (Var 'x) dict) (NumType))
-;;;                (check-equal? (find (Const 4) dict) (NumType))))
-
-;;;   (test-case "nested arith exprs"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (Add (Add (Var 'y) (Var 'z)) (Var 'x))])
-;;;                (type-check ast dict)
-;;;                (check-equal? (find (Var 'y) dict) (NumType))
-;;;                (check-equal? (find (Var 'x) dict) (NumType))
-;;;                (check-equal? (find (Var 'z) dict) (NumType))))
-
-;;;   (test-case "assignment"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (Assn (Var 'x) (Add (Const 4) (Const 5)))])
-;;;                (type-check ast dict)
-;;;                (check-equal? (find (Var 'x) dict) (NumType))
-;;;                (check-equal? (find (Var 'x) dict) (NumType))
-;;;                (check-equal? (find (Add (Const 4) (Const 5)) dict) (NumType))
-;;;                (check-equal? (find (Const 4) dict) (NumType))))
-
-;;;   (test-case "return stmt"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (Return (String "apple"))])
-;;;                (type-check ast dict)
-;;;                (check-equal? (find (String "apple") dict) (StringType))
-;;;                (check-equal? (find ast dict) (StringType))))
-
-;;;   (test-case "func w/ return value"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (FuncDec (NumType)
-;;;                                  "blah"
-;;;                                  (list (Arg (NumType) (Var 'x) empty)
-;;;                                        (Arg (NumType) (Var 'y) empty))
-;;;                                  (list (Return (Add (Var 'x) (Var 'y)))))])
-;;;                (type-check ast dict)
-;;;                (check-equal? (find (Var 'x) dict) (NumType))
-;;;                (check-equal? (find (Var 'y) dict) (NumType))
-;;;                (check-equal? (find "blah" dict) (NumType))))
-
-;;;   (test-case "func w/ wrong types for return"
-;;;              (let ([dict (make-hash)]
-;;;                    [ast (FuncDec (StringType)
-;;;                                  "blah"
-;;;                                  (list (Arg (NumType) (Var 'x) empty)
-;;;                                        (Arg (NumType) (Var 'y) empty))
-;;;                                  (list (Return (Add (Var 'x) (Var 'y)))))])
-;;;                (check-exn
-;;;                 (λ (e) (regexp-match* #rx"Failed type checking" (exn-message e)))
-;;;                 (λ () (type-check ast dict))))))
-
-                             
+(require "parser-v2.rkt")
+(define test-ast (dsl-parser (lambda () (dsl-lexer port))))
+(define store (make-hash))
+(type-check test-ast store)
