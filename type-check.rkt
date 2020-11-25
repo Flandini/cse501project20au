@@ -97,7 +97,7 @@
       
     [_ void]))
 
-(require "parser-v2.rkt")
+(require "parser.rkt")
 (define test-ast (dsl-parser (lambda () (dsl-lexer port))))
 (define store (make-hash))
 (type-check test-ast store)

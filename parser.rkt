@@ -1,242 +1,206 @@
 #lang racket
 
-(require peg
+(provide (all-defined-out))
+
+(require parser-tools/lex
+         parser-tools/yacc
+         (prefix-in : parser-tools/lex-sre)
          "ast.rkt")
 
-;; Helper functions
-(define (build-arith-tree left rightlst)
-  (if (or (not rightlst) (empty? rightlst))
-      left
-      (let ([left-tree left])
-        (for ([fst rightlst] [snd (cdr rightlst)])
-          (when (operator? fst)
-            (set! left-tree ((op-str->constr fst) left-tree snd))))
-        left-tree)))
+;; START LEXER
+(define-empty-tokens op-tokens (+ - / * > >= < <= != == ! AND OR = COMMA
+                                FOR IF ELSE COLON LBRACE RBRACE LPAREN RPAREN
+                                NUMTYPE STRINGTYPE RETURN STRINGITERTYPE NUMITERTYPE
+                                CONCAT APPEND STR_LENGTH EQUALS SPLIT ITER_CONCAT ITER_LENGTH 
+                                FIRST STON NTOS SEMICOLON PIPE EOF))
+
+(define-tokens val-tokens (VAR NUM STR COMMENT))
+
+(define-lex-abbrevs
+    (lower (:/ "a" "z"))
+    (upper (:/ "A" "Z"))
+    (digit (:/ "0" "9"))
+    (single-line-comment (:: "//" (:* any-char) #\newline))
+    (multi-line-comment (:: "/*" (:* (:or (:~ "*") (:: (:+ "*") (:& (:~ "*") (:~ "/"))))) (:+ "*") "/"))
+    (whitespace (:or #\tab #\space #\newline))
+    (operator (:or "+" "-" "/" "*" ">" ">=" "<" "<=" "!=" "==" "!" "="))
+    (var-name (:: (:or lower upper) (:* (:or lower upper digit "_" "-")))))
+
+(define dsl-lexer 
+    (lexer
+        [(eof) 'EOF]
+        [whitespace (dsl-lexer input-port)]
+        [single-line-comment (dsl-lexer input-port)]
+        [multi-line-comment (dsl-lexer input-port)]
+        ["," 'COMMA]
+        ["&&" 'AND]
+        ["||" 'OR]
+        ["for" 'FOR]
+        ["if" 'IF]
+        ["else" 'ELSE]
+        [":" 'COLON]
+        ["{" 'LBRACE]
+        ["}" 'RBRACE]
+        ["(" 'LPAREN]
+        [")" 'RPAREN]
+        ["num" 'NUMTYPE]
+        ["string" 'STRINGTYPE]
+        ["string_iter" 'STRINGITERTYPE]
+        ["num_iter" 'NUMITERTYPE]
+        ["return" 'RETURN]
+        ["concat" 'CONCAT]
+        ["iter_concat" 'ITER_CONCAT]
+        ["append" 'APPEND]
+        ["string_length" 'STR_LENGTH]
+        ["iter_length" 'ITER_LENGTH]
+        ["split" 'SPLIT]
+        ["equals" 'EQUALS]
+        ["first" 'FIRST]
+        ["ston" 'STON]
+        ["ntos" 'NTOS]
+        [";" 'SEMICOLON]
+        ["|" 'PIPE]
+        [operator (string->symbol lexeme)]
+        [(:or "0" (:: (:? "-") (:/ "1" "9") (:* digit))) (token-NUM (string->number lexeme))]
+        [(:: "\"" (:* (:- any-char "\"")) "\"") (token-STR lexeme)]
+        [var-name (token-VAR lexeme)]))
+;; END LEXER
+
+(define (error-handler tok-ok? tok-name tok-value)
+   (displayln
+      (format "Error at ~a~a" 
+              tok-name (if tok-value 
+                           (format " of val ~a" tok-value)
+                           ""))))
+
+;; START PARSER
+(define dsl-parser
+    (parser 
+        (tokens op-tokens val-tokens)
+        (start program)
+        (debug "debug.out")
+        (end EOF)
+        (error error-handler)
+        (precs (left COMMA)
+               (right =)
+               (left OR)
+               (left AND)
+               (left == !=)
+               (left < <= > >=)
+               (left - +)
+               (left * /)
+               (right !)
+               (left APPEND CONCAT EQUALS SPLIT ITER_LENGTH
+                     STR_LENGTH STON NTOS ITER_CONCAT)
+               (left LPAREN))
+        (grammar
+            (program
+                [(funcdecl) (list $1)]
+                [(funcdecl program) (cons $1 $2)])
+            (statement
+                [(decl SEMICOLON) $1]
+                [(return SEMICOLON) $1]
+                [(if) $1]
+                [(loop) $1])
+            (statement-list
+                [(statement) (list $1)]
+                [(statement statement-list) (cons $1 $2)])
+            (type 
+                [(NUMTYPE) (Type 'num)]
+                [(STRINGTYPE) (Type 'string)]
+                [(STRINGITERTYPE) (Type 'string_iter)]
+                [(NUMITERTYPE) (Type 'num_iter)])
+            (range
+                [(LBRACE NUM COMMA NUM RBRACE) (Range $2 $4)])
+            (arg 
+                [(type VAR) (Arg $1 $2 empty empty)]
+                [(type VAR range) (Arg $1 $2 $3 empty)]
+                [(NUMTYPE range VAR) (Arg (Type 'num) $3 empty $2)]
+                [(NUMITERTYPE range range VAR) (Arg (Type 'num_iter) $4 $3 $2)]
+                [(STRINGTYPE range VAR) (Arg (Type 'string) $3 empty $2)]
+                [(STRINGITERTYPE range range VAR) (Arg (Type 'string_iter) $4 $3 $2)])
+            (argslist
+                [(arg) (list $1)]
+                [(arg COMMA argslist) (cons $1 $3)])
+            (funcdecl
+                [(type range VAR LPAREN RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $3 empty $7 $2)]
+                [(type VAR LPAREN RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $2 empty $6 empty)]
+                [(type range VAR LPAREN argslist RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $3 $5 $8 $2)]
+                [(type VAR LPAREN argslist RPAREN LBRACE statement-list RBRACE)
+                    (FuncDec $1 $2 $4 $7 empty)])
+            (decl
+                [(type VAR = expr) (Decl $1 $2 $4)])
+            (return 
+                [(RETURN expr) (Return $2)])
+            (conditional
+                [(compare) $1]
+                [(expr) $1])
+            (if 
+                [(IF LPAREN conditional RPAREN LBRACE statement-list RBRACE)
+                    (If $3 $6 empty)]
+                [(IF LPAREN conditional RPAREN LBRACE statement-list RBRACE ELSE LBRACE statement-list RBRACE)
+                    (If $3 $6 $10)])
+            (iterator
+                [(VAR) (Var $1)]
+                [(NUM) (Num $1)])
+            (iterator-body
+                [(VAR COLON iterator) (list (list $1 $3))]
+                [(VAR COLON iterator COMMA VAR COLON iterator) 
+                    (cons (list $1 $3) (list $5 $7))])
+            (iter-decl 
+                [(decl) $1]
+                [(type VAR) (Decl $1 $2 empty)])
+            (for-body 
+                [(expr SEMICOLON) (list $1)]
+                [(statement for-body) (cons $1 $2)])
+            (loop
+                [(FOR LPAREN iterator-body RPAREN LBRACE for-body RBRACE) 
+                    (For $3 empty $6)]
+                [(FOR LPAREN iterator-body PIPE iter-decl RPAREN LBRACE for-body RBRACE)
+                    (For $3 $5 $8)])
+            (binaryfn
+                [(CONCAT) StrConcat]
+                [(APPEND) StrAppend]
+                [(EQUALS) StrEquals]
+                [(ITER_CONCAT) IterConcat]
+                [(SPLIT) StrSplit])
+            (unaryfn
+                [(STR_LENGTH) StrLength]
+                [(FIRST) IterFirst]
+                [(ITER_LENGTH) IterLength]
+                [(STON) StrToNum]
+                [(NTOS) NumToStr])
+            (userfn-argslist
+                [(expr) (list $1)]
+                [(expr COMMA userfn-argslist) (cons $1 $3)])
+            (userfn
+                [(VAR LPAREN userfn-argslist RPAREN) (UserFnCall $1 $3)])
+            (expr 
+                [(expr OR expr) (Or $1 $3)]
+                [(expr AND expr) (And $1 $3)]
+                [(expr + expr) (Add $1 $3)]
+                [(expr - expr) (Minus $1 $3)]
+                [(expr * expr) (Mult $1 $3)]
+                [(expr / expr) (Div $1 $3)]
+                [(! expr) (Not $2)]
+                [(userfn) $1]
+                [(unaryfn LPAREN expr RPAREN) ($1 $3)]
+                [(binaryfn LPAREN expr COMMA expr RPAREN) ($1 $3 $5)]
+                [(VAR) (Var $1)]
+                [(NUM) (Num $1)]
+                [(STR) (String $1)])
+            (compare
+                [(expr < expr) (Lt $1 $3)]
+                [(expr > expr) (Gt $1 $3)]
+                [(expr <= expr) (Lte $1 $3)]
+                [(expr >= expr) (Gte $1 $3)]
+                [(expr == expr) (Eq $1 $3)]))))
+;; END PARSER
 
 
-;; Helper productions
-(define-peg DIGIT (range #\0 #\9))
-(define-peg CHAR-RANGE (or (range #\a #\z) (range #\A #\Z)))
-(define-peg/drop WHITESPACE (* (or (char #\space)
-                                   (char #\newline)
-                                   (char #\tab))))
-(define-peg IDENTIFIER (and CHAR-RANGE
-                            (*
-                             (or CHAR-RANGE
-                                 DIGIT
-                                 (char #\_)
-                                 (char #\-)))))
-
-;; Productions start
-;; <NUM> ::= <DIGIT>+
-(define-peg NUM
-  (name res (and (? (string "-")) (+ DIGIT)))
-  (Num (string->number res)))
-
-;; <TYPE> ::= "num[]" / "string[]" / "num" / "string"
-(define-peg TYPE
-  (name res (or (and (string "num") WHITESPACE (string "[]"))
-                (string "num[]")
-                (string "string[]")
-                (and (string "string") WHITESPACE (string "[]"))
-                (string "num")
-                (string "string")))
-  (Type res))
-
-;; <VAR> ::= [a-zA-Z] ([a-zA-Z0-9_-])*
-(define-peg VAR
-  (name res IDENTIFIER)
-  (Var res))
-
-;; <VAR> ::= " <ascii> "
-(define-peg STATIC-STRING
-  (and (string "\"")
-       (name contents (any-char))
-       (string "\""))
-  (String contents))
-
-;; Operator Parsing START
-(define-peg STRING-BINOP
-  (name op (or (string "str-equals?")
-               (string "str-concat")
-               (string "str-append")
-               (string "str-split")))
-  (match op
-    ["str-equals?" StrEquals]
-    ["str-concat" StrConcat]
-    ["str-append" StrAppend]
-    ["str-split" StrSplit]))
-
-(define-peg STRING-UNOP
-  (name op (or (string "str-length")
-               (string "str-first")
-               (string "ston")))
-  (match op
-    ["str-length" StrLength]
-    ["str-first" StrFirst]
-    ["ston" StrToNum]))
-
-(define-peg ARRAY-BINOP
-  (name op (or (string "arr-equals?")
-               (string "arr-concat")
-               (string "arr-append")))
-  (match op
-    ["arr-equals?" ArrEquals]
-    ["arr-concat" ArrConcat]
-    ["arr-append" ArrAppend]))
-
-(define-peg ARRAY-UNOP
-  (name op (or (string "arr-length")
-               (string "arr-first")))
-  (match op
-    ["arr-length" ArrLength]
-    ["arr-first" ArrFirst]))
-
-(define-peg COMPOP
-  (name op (or (string "<")
-               (string ">")
-               (string ">=")
-               (string "<=")
-               (string "!=")
-               (string "==")))
-  (match op
-    ["<" Lt]
-    [">" Gt]
-    ["<=" Lte]
-    [">=" Gte]
-    ["==" Eq]
-    ["!=" (lambda (subexpr) (Not (Eq subexpr)))]))
-
-(define-peg LOGIC-OP
-  (name op (or (string "&&")
-               (string "||")
-               (string "!")))
-  (match op
-    ["&&" And]
-    ["||" Or]
-    ["!" Not]))
-
-(define-peg MISC-OP
-  (string "ntos")
-  NumToStr)
-;; Operator Parsing END
-
-;; Function calls start
-(define-peg UNARY-FNCALL
-  (or (and (name constructor STRING-UNOP)
-           WHITESPACE
-           (string "(")
-           WHITESPACE
-           (name arg CHAINABLE-EXPR)
-           WHITESPACE
-           (string ")"))
-      (and (name constructor ARRAY-UNOP)
-           WHITESPACE
-           (string "(")
-           WHITESPACE
-           (name arg CHAINABLE-EXPR)
-           WHITESPACE
-           (string ")"))
-      (and (name constructor MISC-OP)
-           WHITESPACE
-           (string "(")
-           WHITESPACE
-           (name arg CHAINABLE-EXPR)
-           WHITESPACE
-           (string ")")))
-  (constructor arg))
-
-(define-peg BINARY-FNCALL
-  (or (and (name constructor STRING-BINOP)
-           WHITESPACE
-           (string "(")
-           WHITESPACE
-           (name arg1 CHAINABLE-EXPR)
-           WHITESPACE
-           (string ",")
-           WHITESPACE
-           (name arg2 CHAINABLE-EXPR)
-           WHITESPACE
-           (string ")"))
-      (and (name constructor ARRAY-BINOP)
-           WHITESPACE
-           (string "(")
-           WHITESPACE
-           (name arg1 CHAINABLE-EXPR)
-           WHITESPACE
-           (string ",")
-           WHITESPACE
-           (name arg2 CHAINABLE-EXPR)
-           WHITESPACE
-           (string ")")))
-  (constructor arg1 arg2))
-  
-(define-peg FNCALL
-  (or BINARY-FNCALL UNARY-FNCALL))
-;; Function calls end
-
-;; Arithmetic operations start
-(define-peg AEXPL
-  (and (name left AEXPR)
-       WHITESPACE
-       (name righttree (* (and (name op (or (string "+") (string "-")))
-                               WHITESPACE
-                               AEXPR))))
-  (if righttree
-      (build-arith-tree left righttree)
-      left))
-
-(define-peg AEXPR
-  (and (name left BASE-AEXP)
-       WHITESPACE
-       (name righttree (* (and (name op (or (string "*") (string "/")))
-                               WHITESPACE
-                               AEXPR))))
-  (if righttree
-      (build-arith-tree left righttree)
-      left))
-
-(define-peg BASE-AEXP
-  (or
-   (and (string "(")
-        WHITESPACE
-        AEXPL
-        WHITESPACE
-        (string ")"))
-   NUM
-   VAR))
-;; Arithmetic operations end
-    
-(define-peg CHAINABLE-EXPR
-  (or FNCALL AEXPL))
-
-;; <RETURN> ::= return <EXPR>
-(define-peg RETURN
-  (and (string "return")
-       WHITESPACE)
-       ; (name expr EXPR)
-  (Return empty))
-
-;; <DECL> ::= <TYPE> <VAR> = <EXPR>
-(define-peg DECL
-  (and (name type TYPE)
-       WHITESPACE
-       (name var VAR)
-       WHITESPACE
-       (string "=")
-       WHITESPACE)
-       ;       (name expr EXPR
-  (Decl type var '())) ; todo
-
-(module+ test
-  (require rackunit)
-
-  (test-case "add lassoc"
-    (check-equal?
-     (peg AEXPL "1 + 2 + 3")
-     (Add (Add (Num 1) (Num 2)) (Num 3))))
-
-  (test-case "minus lassoc"
-    (check-equal?
-      (peg AEXPL "3 - 2 - 1")
-      (Minus (Minus (Num 3) (Num 2)) (Num 1)))))
+;; Testing
+(define sample-file "samples/medium/array_average.sal")
+(define port (open-input-file sample-file))
