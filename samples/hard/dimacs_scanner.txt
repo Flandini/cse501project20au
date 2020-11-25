@@ -1,32 +1,27 @@
-num[] scan_line (string clause_line)
-{
-      string[] literal_strs = str_split (clause_line, " ");
-
-      for ( lit : literal_strs | num[] literals)
-      {
-      	  literals = arr_append(literals, ston(lit));
-      }
-
-      return literals;
-}
-
 /* can't return list of lists, so return one list of integer literals
  * where clauses are separated by a 0
  */
-num[] parse_dimacs (string dimacs)
+num_iter parse_dimacs (string dimacs)
 {
-	/* // split on 'sequences of any of' vs split on 'substring' */
-	string[] lines = str_split(dimacs, "\n\t\r");
-
-	for ( line : lines | num[] tokens)
+	for ( line : str_split (dimacs, "\n\t\r") | num_iter tokens)
 	{
-		if ( !str_equals? ( str_first ( line ), "c" ) &&
-		     !str_equals? ( str_first ( line ), "p" ) )
+		if ( !starts_with(line, "c") && !starts_with(line, "p") )
 		{
-			tokens = arr_concat (tokens, scan_line ( line ) );
+			concat(tokens, scan_line(line));
 		}
 	}
 
 	return tokens;
 }
+
+num_iter scan_line (string clause_line)
+{
+      for (lit : str_split (clause_line, " ") | num_iter literals )
+      {
+            ston(lit);
+      }
+
+      return literals;
+}
+
 

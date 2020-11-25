@@ -11,7 +11,6 @@
 ;; Statements
 (struct Statement () #:transparent)
 (struct Decl Statement (type var expr) #:transparent)
-(struct IterAssn Statement (var expr) #:transparent)
 (struct Return Statement (expr) #:transparent)
 (struct If Statement (cnd then els) #:transparent)
 (struct For Statement (iters decl body) #:transparent)
@@ -51,16 +50,14 @@
 (struct StrConcat BinOp (l r) #:transparent)
 (struct StrAppend BinOp (l r) #:transparent)
 (struct StrLength UnOp (val) #:transparent)
-(struct StrFirst UnOp (val) #:transparent)
 (struct StrToNum UnOp (val) #:transparent)
 
-(struct ArrAppend BinOp (l r) #:transparent)
-(struct ArrEquals BinOp (l r) #:transparent)
-(struct ArrConcat BinOp (l r) #:transparent)
-(struct ArrLength UnOp (val) #:transparent)
-(struct ArrFirst UnOp (val) #:transparent)
+(struct IterConcat BinOp (l r) #:transparent)
+(struct IterLength UnOp (val) #:transparent)
+(struct IterFirst UnOp (val) #:transparent)
 
 (struct NumToStr UnOp (val) #:transparent)
+
 (struct UserFnCall Expr (name argslist) #:transparent)
 
 ;; Helper functions

@@ -95,7 +95,9 @@
       
     [(For iters decl body)
       (type-check decl store)
-      (type-check body store)]))
+      (type-check body store)]
+      
+    [_ void]))
 
 ;;; (module+ test
 ;;;   (require rackunit)

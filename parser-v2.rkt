@@ -7,11 +7,10 @@
 
 ;; START LEXER
 (define-empty-tokens op-tokens (+ - / * > >= < <= != == ! AND OR = COMMA
-                                FOR IF ELSE COLON LBRACE RBRACE LPAREN RPAREN LSQUARE RSQUARE
-                                NUMTYPE STRINGTYPE RETURN STRINGARRAYTYPE NUMARRAYTYPE
-                                ARR-CONCAT ARR-APPEND ARR-LENGTH ARR-FIRST ARR-EQUALS?
-                                STR-CONCAT STR-APPEND STR-LENGTH STR-FIRST STR-EQUALS?
-                                STON NTOS STR-SPLIT SEMICOLON PIPE EOF))
+                                FOR IF ELSE COLON LBRACE RBRACE LPAREN RPAREN
+                                NUMTYPE STRINGTYPE RETURN STRINGITERTYPE NUMITERTYPE
+                                CONCAT APPEND STR_LENGTH EQUALS SPLIT ITER_CONCAT ITER_LENGTH 
+                                FIRST STON NTOS SEMICOLON PIPE EOF))
 
 (define-tokens val-tokens (VAR NUM STR COMMENT))
 
@@ -42,24 +41,19 @@
         ["}" 'RBRACE]
         ["(" 'LPAREN]
         [")" 'RPAREN]
-        ["[" 'LSQUARE]
-        ["]" 'RSQUARE]
         ["num" 'NUMTYPE]
-        [(:: "string" whitespace) 'STRINGTYPE]
-        [(:: "string" (:* whitespace) "[]") 'STRINGARRAYTYPE]
-        [(:: "num" (:* whitespace) "[]") 'NUMARRAYTYPE]
+        ["string" 'STRINGTYPE]
+        ["string_iter" 'STRINGITERTYPE]
+        ["num_iter" 'NUMITERTYPE]
         ["return" 'RETURN]
-        ["arr_concat" 'ARR-CONCAT]
-        ["arr_append" 'ARR-APPEND]
-        ["arr_length" 'ARR-LENGTH]
-        ["arr_first" 'ARR-FIRST]
-        ["arr_length?" 'ARR-LENGTH?]
-        ["str_concat" 'STR-CONCAT]
-        ["str_append" 'STR-APPEND]
-        ["str_length" 'STR-LENGTH]
-        ["str_first" 'STR-FIRST]
-        ["str_split" 'STR-SPLIT]
-        ["str_equals?" 'STR-EQUALS?]
+        ["concat" 'CONCAT]
+        ["iter_concat" 'ITER_CONCAT]
+        ["append" 'APPEND]
+        ["string_length" 'STR_LENGTH]
+        ["iter_length" 'ITER_LENGTH]
+        ["split" 'SPLIT]
+        ["equals" 'EQUALS]
+        ["first" 'FIRST]
         ["ston" 'STON]
         ["ntos" 'NTOS]
         [";" 'SEMICOLON]
@@ -94,10 +88,8 @@
                (left - +)
                (left * /)
                (right !)
-               (left STR-APPEND  STR-CONCAT STR-EQUALS? 
-                     STR-FIRST STR-SPLIT STR-LENGTH STON
-                     ARR-APPEND ARR-CONCAT ARR-EQUALS?
-                     ARR-LENGTH ARR-FIRST NTOS)
+               (left APPEND CONCAT EQUALS SPLIT ITER_LENGTH
+                     STR_LENGTH STON NTOS ITER_CONCAT)
                (left LPAREN))
         (grammar
             (program
@@ -106,26 +98,25 @@
             (statement
                 [(decl SEMICOLON) $1]
                 [(return SEMICOLON) $1]
-                [(iter-assn SEMICOLON) $1]
                 [(if) $1]
                 [(loop) $1])
             (statement-list
                 [(statement) (list $1)]
                 [(statement statement-list) (cons $1 $2)])
             (type 
-                [(NUMTYPE) (Type "num")]
-                [(STRINGTYPE) (Type "string")]
-                [(STRINGARRAYTYPE) (Type "string[]")]
-                [(NUMARRAYTYPE) (Type "num[]")])
+                [(NUMTYPE) (Type 'num)]
+                [(STRINGTYPE) (Type 'string)]
+                [(STRINGITERTYPE) (Type 'string_iter)]
+                [(NUMITERTYPE) (Type 'num_iter)])
             (range
                 [(LBRACE NUM COMMA NUM RBRACE) (Range $2 $4)])
             (arg 
                 [(type VAR) (Arg $1 $2 empty empty)]
                 [(type VAR range) (Arg $1 $2 $3 empty)]
-                [(NUMTYPE range VAR) (Arg (Type "num") $3 empty $2)]
-                [(NUMTYPE range LSQUARE RSQUARE range VAR) (Arg (Type "num[]") $6 $5 $2)]
-                [(STRINGTYPE range VAR) (Arg (Type "string") $3 empty $2)]
-                [(STRINGTYPE range LSQUARE RSQUARE range VAR) (Arg (Type "string[]") $6 $5 $2)])
+                [(NUMTYPE range VAR) (Arg (Type 'num) $3 empty $2)]
+                [(NUMITERTYPE range range VAR) (Arg (Type 'num_iter) $4 $3 $2)]
+                [(STRINGTYPE range VAR) (Arg (Type 'string) $3 empty $2)]
+                [(STRINGITERTYPE range range VAR) (Arg (Type 'string_iter) $4 $3 $2)])
             (argslist
                 [(arg) (list $1)]
                 [(arg COMMA argslist) (cons $1 $3)])
@@ -157,29 +148,27 @@
                 [(VAR COLON iterator) (list (list $1 $3))]
                 [(VAR COLON iterator COMMA VAR COLON iterator) 
                     (cons (list $1 $3) (list $5 $7))])
-            (iter-assn 
-                [(VAR = expr) (IterAssn $1 $3)])
             (iter-decl 
                 [(decl) $1]
                 [(type VAR) (Decl $1 $2 empty)])
+            (for-body 
+                [(expr SEMICOLON) (list $1)]
+                [(statement for-body) (cons $1 $2)])
             (loop
-                [(FOR LPAREN iterator-body RPAREN LBRACE statement-list RBRACE) 
+                [(FOR LPAREN iterator-body RPAREN LBRACE for-body RBRACE) 
                     (For $3 empty $6)]
-                [(FOR LPAREN iterator-body PIPE iter-decl RPAREN LBRACE statement-list RBRACE)
+                [(FOR LPAREN iterator-body PIPE iter-decl RPAREN LBRACE for-body RBRACE)
                     (For $3 $5 $8)])
             (binaryfn
-                [(ARR-CONCAT) ArrConcat]
-                [(ARR-APPEND) ArrAppend]
-                [(ARR-EQUALS?) ArrEquals]
-                [(STR-CONCAT) StrConcat]
-                [(STR-APPEND) StrAppend]
-                [(STR-EQUALS?) StrEquals]
-                [(STR-SPLIT) StrSplit])
+                [(CONCAT) StrConcat]
+                [(APPEND) StrAppend]
+                [(EQUALS) StrEquals]
+                [(ITER_CONCAT) IterConcat]
+                [(SPLIT) StrSplit])
             (unaryfn
-                [(ARR-LENGTH) ArrLength]
-                [(ARR-FIRST) ArrFirst]
-                [(STR-LENGTH) StrLength]
-                [(STR-FIRST) StrFirst]
+                [(STR_LENGTH) StrLength]
+                [(FIRST) IterFirst]
+                [(ITER_LENGTH) IterLength]
                 [(STON) StrToNum]
                 [(NTOS) NumToStr])
             (userfn-argslist

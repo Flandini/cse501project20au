@@ -1,11 +1,11 @@
-num {0, 255} array_average(num {0, 255} [] {0, 50000} numbers)
+num {0, 255} array_average(num_iter {0, 255} {0, 50000} numbers)
 {
     for ( n : numbers | num acc = 0 )
     {
-    	acc = acc + n;
+    	acc + n;
     }
 
-    num averageish = acc / arr_length(numbers);
+    num averageish = acc / iter_length(numbers);
 
     return averageish;
 }
