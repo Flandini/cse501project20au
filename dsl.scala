@@ -1,6 +1,6 @@
 
 object AST {
-    sealed trait Type
+    sealed trait Type extends Property
     case object StringType extends Type
     case object IntType extends Type 
     case object IntIterType extends Type
@@ -49,9 +49,10 @@ object AST {
     case class Return(expr: Expr) extends Statement
 
     sealed trait ForBody
+    sealed trait Property
     case class FuncDecl(t: Type, range: Option[Range], name: String, args: List[Arg], body: List[Statement])
     case class Iterator(idx: String, iterator: Expr)
-    case class Range(low: Int, high: Int)
+    case class Range(low: Int, high: Int) extends Property
     case class Arg(t: Type,
                    subrange: Option[Range],
                    range: Option[Range],
