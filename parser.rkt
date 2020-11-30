@@ -202,5 +202,5 @@
 
 
 ;; Testing
-(define sample-file "samples/medium/array_average.sal")
-(define port (open-input-file sample-file))
+;(define sample-file "samples/medium/array_average.sal")
+;(define port (open-input-file sample-file))
