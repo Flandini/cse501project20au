@@ -23,6 +23,7 @@ object AST {
     case class Or(left: Expr, right: Expr) extends Expr
     case class And(left: Expr, right: Expr) extends Expr
     case class Not(left: Expr) extends Expr
+    case class Ntos(left: Expr) extends Expr
 
     case class FunCall(name: String, params: List[Expr]) extends Expr
 

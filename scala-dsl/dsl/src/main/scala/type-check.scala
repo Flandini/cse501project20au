@@ -77,9 +77,6 @@ case class SymbolTable() {
 }
 
 object TypeChecker {
-    // Each variable can have propreties like ranges, type
-    // varname/funcname/etc => (propertyname => property)
-    //type SymbolTable = HashMap[String, HashMap[String, Property]]
     type Errors = Vector[String]
     type Result = (Type, Errors)
 
@@ -130,6 +127,7 @@ object TypeChecker {
 
                 (errors, typ)
             }
+
             case For(iter1, iter2, acc, body) => (errors, StringType)
             case If(cond, thn, els) => (errors, StringType)
             case Decl(t, name, expr) => (errors, StringType)
@@ -186,33 +184,48 @@ object TypeChecker {
 
     def checkExpr(expr: Expr): Writer[Type] = {
         expr match {
-            case Add(l, r) => (errors, StringType)
-            case Minus(l,r) => (errors, StringType)
-            case Mult(l,r) => (errors, StringType)
-            case Div(l,r) => (errors, StringType)
-            case Eq(l,r) => (errors, StringType)
-            case Neq(l,r) => (errors, StringType)
-            case Gte(l,r) => (errors, StringType)
-            case Lte(l,r) => (errors, StringType)
-            case Gt(l,r) => (errors, StringType)
-            case Lt(l, r) => (errors, StringType)
-            case Or(l,r) => (errors, StringType)
-            case And(l, r) => (errors, StringType)
-            case Not(l) => (errors, StringType)
+            case Add(l, r) => checkNumericBinOp(expr, l, r)
+            case Minus(l,r) => checkNumericBinOp(expr, l, r)
+            case Mult(l,r) => checkNumericBinOp(expr, l, r)
+            case Div(l,r) => checkNumericBinOp(expr, l, r)
+            case Eq(l,r) => checkNumericBinOp(expr, l, r)
+            case Neq(l,r) => checkNumericBinOp(expr, l, r)
+            case Gte(l,r) => checkNumericBinOp(expr, l, r)
+            case Lte(l,r) => checkNumericBinOp(expr, l, r)
+            case Gt(l,r) => checkNumericBinOp(expr, l, r)
+            case Lt(l, r) => checkNumericBinOp(expr, l, r)
+            case Or(l,r) => checkNumericBinOp(expr, l, r)
+            case And(l, r) => checkNumericBinOp(expr, l, r)
+            case Not(l) => checkNumericUnOp(expr, l)
+            case Ntos(l) => checkNumericUnOp(expr, l)
 
-            case Ston(l) => (errors, StringType)
-            case StrSplit(l,r) => (errors, StringType)
-            case StrEquals(l, r) => (errors, StringType)
-            case StrConcat(l, r) => (errors, StringType)
-            case StrAppend(l, r) => (errors, StringType)
-            case StrLength(l) => (errors, StringType)
+            case Ston(l) => checkStringUnop(expr, l)
+            case StrSplit(l,r) => checkStringBinOp(expr, l, r)
+            case StrEquals(l, r) => checkStringBinOp(expr, l, r)
+            case StrConcat(l, r) => checkStringBinOp(expr, l, r)
+            case StrAppend(l, r) => checkStringBinOp(expr, l, r)
+            case StrLength(l) => checkStringUnop(expr, l)
 
-            case IterConcat(l,r) => (errors, StringType)
-            case IterFirst(l) => (errors, StringType)
-            case IterLength(l) => (errors, StringType)
+            case IterConcat(l,r) => checkIterBinOp(expr, l, r)
+            case IterFirst(l) => checkIterUnOp(expr, l)
+            case IterLength(l) => checkIterUnOp(expr, l)
 
-            case FunCall(name, params) => (errors, StringType)
-            
+            case FunCall(name, params) => {
+                if (!table.nameDefined(name))
+                    // checkFunc(name) TODO:
+                    (errors, ErrorType)
+                else {
+                    val expectedArity: Option[Int] = table.getPropertyForName(name, "arity")
+                    val expectedType: Type = table.getTypeForName(name)
+                    expectedArity match {
+                        case Some(arity) => if (arity != params.length)
+                                                errors ++ s"Arity mismatch for function call ${expr}"
+                        case None => errors ++ s"Couldn't figure out arity for function call ${expr}"
+                    }
+                    (errors, expectedType)
+                }
+            }
+
             case Var(name) => if (table.nameDefined(name))
                                 (errors, table.getTypeForName(name))
                               else {
@@ -229,6 +242,65 @@ object TypeChecker {
             case StrLit(value, range) => {rangeOk(range); (errors, StringType)}
             case IntIter(value, range) => {rangeOk(range); (errors, IntIterType)}
             case StrIter(value, range) => {rangeOk(range); (errors, StrIterType)}
+        }
+    }
+
+    def checkNumericBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
+        val (_, left) = checkExpr(l)
+        if (left != IntType) errors ++ s"Expected expression of type of int at ${l}"
+        val (_, right) = checkExpr(r)
+        if (right != IntType) errors ++ s"Expected expression of type of int at ${r}"
+        (errors, IntType) 
+    }
+
+    def checkStringBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
+        val (_, left) = checkExpr(l)
+        if (left != StringType) errors ++ s"Expected expression of type of string at ${l}"
+        val (_, right) = checkExpr(r)
+        if (right != StringType) errors ++ s"Expected expression of type of string at ${r}"
+
+        e match {
+            case StrSplit(_, _) => (errors, StrIterType)
+            case StrEquals(_, _) => (errors, IntType)
+            case _ => (errors, StringType)
+        }
+    }
+
+    def checkIterBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
+        val (_, left) = checkExpr(l)
+        if (left != StrIterType && left != IntIterType) errors ++ s"Expected expression of type of iterator at ${l}"
+        val (_, right) = checkExpr(r)
+        if (right != StrIterType && right != IntIterType) errors ++ s"Expected expression of type of iterator at ${r}"
+        if (right != left) errors ++ s"Expected expressions ${l} and ${r} to have same iter type"
+        (errors, left) 
+    }
+
+    def checkIterUnOp(e: Expr, l: Expr): Writer[Type] = {
+        val (_, left) = checkExpr(l)
+        if (left != StrIterType && left != IntIterType) errors ++ s"Expected expression of type of iter at ${l}"
+
+        e match {
+            case IterLength(_) => (errors, IntType)
+            case IterFirst(_) => left match {
+                case StrIterType => (errors, StringType)
+                case IntIterType => (errors, IntType)
+            }
+        }
+    }
+
+    def checkStringUnop(e: Expr, l: Expr): Writer[Type] = {
+        val (_, left) = checkExpr(l)
+        if (left != StringType) errors ++ s"Expected expression of type of string at ${l}"
+        (errors, IntType) 
+    }
+
+    def checkNumericUnOp(e: Expr, l: Expr): Writer[Type] = {
+        val (_, left) = checkExpr(l)
+        if (left != IntType) errors ++ s"Expected expression of type of int at ${l}"
+
+        e match {
+            case Ntos(_) => (errors, StringType)
+            case _ => (errors, IntType) 
         }
     }
 
