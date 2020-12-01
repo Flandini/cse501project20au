@@ -1,12 +1,11 @@
 
 import AST._ 
 import scala.collection.mutable.HashMap
-import scala.collection.immutable.Vector
 import scala.collection.mutable.Stack
 
-import cats.data.Writer
-import cats.syntax.writer._
-//import cats.instances.vector._
+//import cats.data.Writer
+//import cats.syntax.writer._
+import cats.instances.vector._
 import cats.syntax.applicative._ // for pure
 import scala.sys.Prop
 
@@ -16,13 +15,21 @@ object TypeChecker {
     type SymbolTable = HashMap[String, HashMap[String, Property]]
     type Errors = Vector[String]
     type Result = (Type, Errors)
-    //type Result[A] = Writer[Vector[String], A]
+
+    type Writer[A] = (Errors, A)
+    def unit[A](a: A): Writer[A] = (Vector(), a)
+    def error(msg: String): Writer[Unit] = (Vector(msg), ())
+    def flatMap[A, B](a: Writer[A], b: A => Writer[B]): Writer[B] = {
+        val (errs, value) = a
+        val (newerrs, newvalue) = b(value)
+        (errs ++ newerrs, newvalue)
+    }
 
     var table: SymbolTable = new HashMap()
     var errors: Errors = Vector()
     var funcStack: Stack[String] = Stack()
 
-    def checkFunc(func: FuncDecl): Result = 
+    def checkFunc(func: FuncDecl): Writer[Type] = 
         func match {
             case FuncDecl(typ, range, name, args, body) => {
                 // Check func not already declared
@@ -51,14 +58,14 @@ object TypeChecker {
                 println(funcStack)
 
                 funcStack.pop()
-                (typ, errors)
+                (errors, typ)
             }
         }
 
-    def checkStmt(stmt: Statement): Result =
+    def checkStmt(stmt: Statement): Writer[Type] =
         stmt match {
             case Return(expr) => {
-                val (typ, preverrors) = checkExpr(expr)
+                val (preverrors, typ) = checkExpr(expr)
                 val currentFunc = funcStack.top
                 val expected = 
                     table.get(currentFunc) match {
@@ -68,25 +75,25 @@ object TypeChecker {
                 expected match {
                     case Some(otherType) => {
                         if (otherType == typ)
-                            (typ, errors)
+                            (errors, typ)
                         else {
                             errors ++ s"Return type of ${expr} doesnt match expected ${otherType}"
-                            (typ, errors)
+                            (errors, typ)
                         }
                     }
                     case None => {
                         errors ++ s"Return type of ${expr} wrong"
-                        (typ, errors)
+                        (errors, typ)
                     }
                 }
             }
-            case For(iter1, iter2, acc, body) => (StringType, errors)
-            case If(cond, thn, els) => (StringType, errors)
-            case Decl(t, name, expr) => (StringType, errors)
+            case For(iter1, iter2, acc, body) => (errors, StringType)
+            case If(cond, thn, els) => (errors, StringType)
+            case Decl(t, name, expr) => (errors, StringType)
         }
 
 
-    def checkIterator(iter: Iterator): Result = 
+    def checkIterator(iter: Iterator): Writer[Type] = 
         iter match {
             case Iterator(idx, itere) => {
                 table.get(idx) match {
@@ -102,7 +109,7 @@ object TypeChecker {
             }
         }
 
-    def checkArg(arg: Arg): Result = {
+    def checkArg(arg: Arg): Writer[Type] = {
         val typ = arg.t
         val subrange = arg.subrange
         val range = arg.range
@@ -118,59 +125,57 @@ object TypeChecker {
         table.get(name) match {
             case Some(traits) => {
                 errors ++ s"Args cannot have the same name ${name}"
-                (typ, errors)
+                (errors, typ)
             }
             case None => {
                 var traits = new HashMap[String, Property]()
                 traits.put("type", typ)
-                range match {
-                    case None => {}
-                    case Some(r) => traits.put("range", r)
-                }
-                subrange match {
-                    case None => {}
-                    case Some(r) => traits.put("subrange", r)
-                }
+
+                for { 
+                    r <- range
+                    sr <- subrange
+                } yield { traits.put("range", r); traits.put("subrange", r) }
+
                 table.put(name, traits)
             }
         }
         
-        (typ, errors)
+        (errors, typ)
     }
 
-    def checkExpr(expr: Expr): Result = {
+    def checkExpr(expr: Expr): Writer[Type] = {
         expr match {
-            case Add(l, r) => (StringType, errors)
-            case Minus(l,r) => (StringType, errors)
-            case Mult(l,r) => (StringType, errors)
-            case Div(l,r) => (StringType, errors)
-            case Eq(l,r) => (StringType, errors)
-            case Neq(l,r) => (StringType, errors)
-            case Gte(l,r) => (StringType, errors)
-            case Lte(l,r) => (StringType, errors)
-            case Gt(l,r) => (StringType, errors)
-            case Lt(l, r) => (StringType, errors)
-            case Or(l,r) => (StringType, errors)
-            case And(l, r) => (StringType, errors)
-            case Not(l) => (StringType, errors)
+            case Add(l, r) => (errors, StringType)
+            case Minus(l,r) => (errors, StringType)
+            case Mult(l,r) => (errors, StringType)
+            case Div(l,r) => (errors, StringType)
+            case Eq(l,r) => (errors, StringType)
+            case Neq(l,r) => (errors, StringType)
+            case Gte(l,r) => (errors, StringType)
+            case Lte(l,r) => (errors, StringType)
+            case Gt(l,r) => (errors, StringType)
+            case Lt(l, r) => (errors, StringType)
+            case Or(l,r) => (errors, StringType)
+            case And(l, r) => (errors, StringType)
+            case Not(l) => (errors, StringType)
 
-            case Ston(l) => (StringType, errors)
-            case StrSplit(l,r) => (StringType, errors)
-            case StrEquals(l, r) => (StringType, errors)
-            case StrConcat(l, r) => (StringType, errors)
-            case StrAppend(l, r) => (StringType, errors)
-            case StrLength(l) => (StringType, errors)
+            case Ston(l) => (errors, StringType)
+            case StrSplit(l,r) => (errors, StringType)
+            case StrEquals(l, r) => (errors, StringType)
+            case StrConcat(l, r) => (errors, StringType)
+            case StrAppend(l, r) => (errors, StringType)
+            case StrLength(l) => (errors, StringType)
 
-            case IterConcat(l,r) => (StringType, errors)
-            case IterFirst(l) => (StringType, errors)
-            case IterLength(l) => (StringType, errors)
+            case IterConcat(l,r) => (errors, StringType)
+            case IterFirst(l) => (errors, StringType)
+            case IterLength(l) => (errors, StringType)
 
-            case FunCall(name, params) => (StringType, errors)
-            case Var(name) => (StringType, errors)
-            case IntLit(num, width, signed, range) => (StringType, errors)
-            case StrLit(value, range) => (StringType, errors)
-            case IntIter(value, range) => (StringType, errors)
-            case StrIter(value, range) => (StringType, errors)
+            case FunCall(name, params) => (errors, StringType)
+            case Var(name) => (errors, StringType)
+            case IntLit(num, width, signed, range) => (errors, StringType)
+            case StrLit(value, range) => (errors, StringType)
+            case IntIter(value, range) => (errors, StringType)
+            case StrIter(value, range) => (errors, StringType)
         }
     }
 
