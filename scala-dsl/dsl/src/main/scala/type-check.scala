@@ -4,11 +4,12 @@ import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
 import scala.collection.immutable.Vector
 
+import scala.math.BigInt
+
 //import cats.data.Writer
 //import cats.syntax.writer._
 //import cats.instances.vector._
-import cats.syntax.applicative._ // for pure
-import scala.sys.Prop
+//import cats.syntax.applicative._ // for pure
 
 case class PropertyStore(name: String) {
     var table = new HashMap[String, Property]()
@@ -63,6 +64,14 @@ case class SymbolTable() {
             properties  <- table.get(name)
             t <- properties.getAttribute(propertyName)
         } yield t
+
+    def getTypeForName(name: String): Type = getPropertyForName(name, "type") match {
+            case Some(t) => t match {
+                case t: Type => t 
+                case _ => ErrorType
+            }
+            case None => ErrorType
+        }
 
     override def toString: String = table.toString
 }
@@ -203,12 +212,58 @@ object TypeChecker {
             case IterLength(l) => (errors, StringType)
 
             case FunCall(name, params) => (errors, StringType)
-            case Var(name) => (errors, StringType)
-            case IntLit(num, width, signed, range) => (errors, StringType)
-            case StrLit(value, range) => (errors, StringType)
-            case IntIter(value, range) => (errors, StringType)
-            case StrIter(value, range) => (errors, StringType)
+            
+            case Var(name) => if (table.nameDefined(name))
+                                (errors, table.getTypeForName(name))
+                              else {
+                                errors ++ s"Var ${name} not defined before use"
+                                (errors, ErrorType)
+                              }
+            case IntLit(num, width, signed, range) => {
+                if (!intOk(num, width, signed, range)) {
+                    errors ++ s"${expr} malformed - check width, signedness, and range constraints"
+                }
+
+                (errors, IntType)
+            }
+            case StrLit(value, range) => {rangeOk(range); (errors, StringType)}
+            case IntIter(value, range) => {rangeOk(range); (errors, IntIterType)}
+            case StrIter(value, range) => {rangeOk(range); (errors, StrIterType)}
         }
+    }
+
+    def intOk(num: Int, width: Int, signed: Boolean, range: Option[Range]): Boolean = {
+        if (!rangeOk(range)) return false
+
+        var lowerBound = if (signed) BigInt(-(2 ^ (width - 1))) else BigInt(0)
+        var upperBound = if (signed) BigInt(2 ^ (width - 1) - 1) else BigInt(2 ^ width - 1)
+
+        var upperRangeBound = upperBound
+        var lowerRangeBound = lowerBound 
+
+        range match {
+            case Some(Range(lo, hi)) => {
+                lowerRangeBound = BigInt(lo)
+                upperRangeBound = BigInt(hi)
+            }
+            case None => {}
+        }
+
+        lowerBound = lowerBound.max(lowerRangeBound)
+        upperBound = upperBound.min(upperRangeBound)
+
+        val normalizedNum = BigInt(num)
+
+        lowerBound <= normalizedNum && normalizedNum <= upperBound
+    }
+
+    def rangeOk(range: Option[Range]): Boolean = range match {
+        case Some(Range(lo, hi)) => 
+            if (lo > hi) {
+                errors ++ s"Lower bound on range must be less than or equal to upper bound: ${Range(lo, hi)}"
+                false
+            } else true
+        case None => true
     }
 
 }

@@ -5,6 +5,7 @@ object AST {
     case object IntType extends Type 
     case object IntIterType extends Type
     case object StrIterType extends Type
+    case object ErrorType extends Type
 
     sealed trait Expr extends ForBody
 
@@ -61,7 +62,6 @@ object AST {
                    subrange: Option[Range],
                    range: Option[Range],
                    name: String)
-    case class Error(msg: String)
 
     val dimacs_scanner: FuncDecl =
         FuncDecl(
