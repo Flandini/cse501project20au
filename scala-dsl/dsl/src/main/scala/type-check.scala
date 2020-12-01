@@ -2,17 +2,75 @@
 import AST._ 
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
+import scala.collection.immutable.Vector
 
 //import cats.data.Writer
 //import cats.syntax.writer._
-import cats.instances.vector._
+//import cats.instances.vector._
 import cats.syntax.applicative._ // for pure
 import scala.sys.Prop
+
+case class PropertyStore(name: String) {
+    var table = new HashMap[String, Property]()
+
+    override def toString: String = s"${name} :: ${table}"
+
+    def setRange(r: Option[Range]): PropertyStore = {
+        for {
+            range <- r
+        } yield table.put("range", range)
+        this 
+    }
+
+    def setSubrange(sr: Option[Range]): PropertyStore = {
+        for {
+            subrange <- sr
+        } yield table.put("subrange", subrange)
+        this 
+    }
+
+    def setType(t: Type): PropertyStore = {
+        table.put("type", t)
+        this 
+    }
+
+    def setArity(a: Int): PropertyStore = { 
+        table.put("arity", Arity(a))
+        this
+    }
+
+    def hasType(t: Type): Boolean = table.get("type") match {
+        case Some(actualType) => t == actualType
+        case None => false
+    }
+
+    def getAttribute(attr: String): Option[Property] = table.get(attr)
+}
+
+case class SymbolTable() {
+    var table = new HashMap[String, PropertyStore]()
+
+    def nameDefined(name: String): Boolean = table.get(name) match {
+        case Some(propertyStore) => true
+        case None => false
+    }
+
+    def defineName(name: String): Unit = table.put(name, PropertyStore(name))
+    def setPropertiesForName(name: String, p: PropertyStore): Unit = table.put(name, p)
+
+    def getPropertyForName(name: String, propertyName: String): Option[Property] =
+        for {
+            properties  <- table.get(name)
+            t <- properties.getAttribute(propertyName)
+        } yield t
+
+    override def toString: String = table.toString
+}
 
 object TypeChecker {
     // Each variable can have propreties like ranges, type
     // varname/funcname/etc => (propertyname => property)
-    type SymbolTable = HashMap[String, HashMap[String, Property]]
+    //type SymbolTable = HashMap[String, HashMap[String, Property]]
     type Errors = Vector[String]
     type Result = (Type, Errors)
 
@@ -25,37 +83,26 @@ object TypeChecker {
         (errs ++ newerrs, newvalue)
     }
 
-    var table: SymbolTable = new HashMap()
+    var table: SymbolTable = new SymbolTable()
     var errors: Errors = Vector()
     var funcStack: Stack[String] = Stack()
 
     def checkFunc(func: FuncDecl): Writer[Type] = 
         func match {
             case FuncDecl(typ, range, name, args, body) => {
-                // Check func not already declared
-                table.get(name) match {
-                    case None => table.put(name, new HashMap())
-                    case Some(res) => errors ++ s"Func ${name} already defined"
-                }
+                val p = PropertyStore(name)
+                            .setRange(range)
+                            .setType(typ)
+                            .setArity(args.length)
 
-                table.get(name) match {
-                    case None => {}
-                    case Some(res) => {
-                        res.put("type", typ)
-                        range match {
-                            case None => {}
-                            case Some(r) => res.put("range", r)
-                        }
-                        res.put("arity", Arity(args.length))
-                        funcStack.push(name)
-                    }
-                }
+                if (table.nameDefined(name))
+                    errors ++ s"Func ${name} already defined"
+
+                table.setPropertiesForName(name, p)
+                funcStack.push(name)
 
                 args.foreach(checkArg)
                 body.foreach(checkStmt)
-
-                println(table)
-                println(funcStack)
 
                 funcStack.pop()
                 (errors, typ)
@@ -67,25 +114,12 @@ object TypeChecker {
             case Return(expr) => {
                 val (preverrors, typ) = checkExpr(expr)
                 val currentFunc = funcStack.top
-                val expected = 
-                    table.get(currentFunc) match {
-                        case Some(traits) => traits.get("type")
-                        case None => None
-                    }
-                expected match {
-                    case Some(otherType) => {
-                        if (otherType == typ)
-                            (errors, typ)
-                        else {
-                            errors ++ s"Return type of ${expr} doesnt match expected ${otherType}"
-                            (errors, typ)
-                        }
-                    }
-                    case None => {
-                        errors ++ s"Return type of ${expr} wrong"
-                        (errors, typ)
-                    }
-                }
+                val expectedReturnType = table.getPropertyForName(currentFunc, "type")
+
+                if (!expectedReturnType.contains(typ))
+                    errors ++ s"Return type of ${expr} doesnt match expected ${expectedReturnType}"
+
+                (errors, typ)
             }
             case For(iter1, iter2, acc, body) => (errors, StringType)
             case If(cond, thn, els) => (errors, StringType)
@@ -95,17 +129,23 @@ object TypeChecker {
 
     def checkIterator(iter: Iterator): Writer[Type] = 
         iter match {
-            case Iterator(idx, itere) => {
-                table.get(idx) match {
-                    case None => { 
-                        table.put(idx, new HashMap())
-                        checkExpr(itere)
-                    }
-                    case Some(traits) => {
-                        errors ++ s"Iterator ${idx} shadows another variable and is not allowed"
-                        checkExpr(itere)
-                    }
+            case Iterator(idx, itere) => {                
+                val (errors, t) = checkExpr(itere)
+                var expectedIdxType: Type = IntType
+
+                if (table.nameDefined(idx))
+                   errors ++ s"Iterator ${idx} shadows another variable and is not allowed"
+
+                t match {
+                    case IntIterType => expectedIdxType = IntType
+                    case StrIterType => expectedIdxType = StringType
+                    case _ => errors ++ s"Can only iterate over iterator types in '${idx} : ${itere}'"
                 }
+
+                val p = PropertyStore(idx).setType(expectedIdxType)
+                table.setPropertiesForName(idx, p)
+
+                (errors, t)
             }
         }
 
@@ -122,24 +162,16 @@ object TypeChecker {
             case None => {}
         }
 
-        table.get(name) match {
-            case Some(traits) => {
-                errors ++ s"Args cannot have the same name ${name}"
-                (errors, typ)
-            }
-            case None => {
-                var traits = new HashMap[String, Property]()
-                traits.put("type", typ)
+        val p = PropertyStore(name)
+                    .setType(typ)
+                    .setRange(range)
+                    .setSubrange(subrange)
 
-                for { 
-                    r <- range
-                    sr <- subrange
-                } yield { traits.put("range", r); traits.put("subrange", r) }
+        if (table.nameDefined(name))
+            errors ++ s"Arg name${name} already previously defined"
 
-                table.put(name, traits)
-            }
-        }
-        
+        table.setPropertiesForName(name, p)
+
         (errors, typ)
     }
 
