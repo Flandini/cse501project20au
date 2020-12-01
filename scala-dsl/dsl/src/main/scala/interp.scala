@@ -1,4 +1,4 @@
-
+/*
 import AST._ 
 
 object idenM {
@@ -49,4 +49,4 @@ object Interpreter {
                 else
                     lookup(name, xs)
         }
-}
+}*/
