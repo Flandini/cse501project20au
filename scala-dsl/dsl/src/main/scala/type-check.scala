@@ -3,8 +3,10 @@ import AST._
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
 import scala.collection.immutable.Vector
+import scala.collection.mutable.ListBuffer
 
 import scala.math.BigInt
+import java.lang.Thread.State
 
 //import cats.data.Writer
 //import cats.syntax.writer._
@@ -68,21 +70,21 @@ case class SymbolTable() {
     def getTypeForName(name: String): Type = getPropertyForName(name, "type") match {
             case Some(t) => t match {
                 case t: Type => t 
-                case _ => ErrorType
+                case _ => DErrorType
             }
-            case None => ErrorType
+            case None => DErrorType
         }
 
     override def toString: String = table.toString
 }
 
 object TypeChecker {
-    type Errors = Vector[String]
+    type Errors = ListBuffer[String]
     type Result = (Type, Errors)
 
     type Writer[A] = (Errors, A)
-    def unit[A](a: A): Writer[A] = (Vector(), a)
-    def error(msg: String): Writer[Unit] = (Vector(msg), ())
+    def unit[A](a: A): Writer[A] = (ListBuffer(), a)
+    def error(msg: String): Writer[Unit] = (ListBuffer(msg), ())
     def flatMap[A, B](a: Writer[A], b: A => Writer[B]): Writer[B] = {
         val (errs, value) = a
         val (newerrs, newvalue) = b(value)
@@ -90,7 +92,7 @@ object TypeChecker {
     }
 
     var table: SymbolTable = new SymbolTable()
-    var errors: Errors = Vector()
+    var errors: Errors = ListBuffer()
     var funcStack: Stack[String] = Stack()
 
     def checkFunc(func: FuncDecl): Writer[Type] = 
@@ -102,13 +104,14 @@ object TypeChecker {
                             .setArity(args.length)
 
                 if (table.nameDefined(name))
-                    errors ++ s"Func ${name} already defined"
+                    errors += s"Func ${name} already defined"
 
                 table.setPropertiesForName(name, p)
                 funcStack.push(name)
 
                 args.foreach(checkArg)
                 body.foreach(checkStmt)
+                checkAllDeclsHaveRhs(body)
 
                 funcStack.pop()
                 (errors, typ)
@@ -123,16 +126,73 @@ object TypeChecker {
                 val expectedReturnType = table.getPropertyForName(currentFunc, "type")
 
                 if (!expectedReturnType.contains(typ))
-                    errors ++ s"Return type of ${expr} doesnt match expected ${expectedReturnType}"
+                    errors += s"Return type of ${expr} doesnt match expected ${expectedReturnType}"
 
                 (errors, typ)
             }
 
-            case For(iter1, iter2, acc, body) => (errors, StringType)
-            case If(cond, thn, els) => (errors, StringType)
-            case Decl(t, name, expr) => (errors, StringType)
+            case For(iter1, iter2, acc, body) => {
+                checkIterator(iter1)
+                iter2 match {
+                    case Some(iter) => checkIterator(iter)
+                    case None => None
+                }
+                acc match {
+                    case Decl(_, _, _) => checkStmt(acc)
+                    case _ => errors += s"Accumulator for range ${stmt} malformed"
+                }
+                checkLoopBody(body)
+            }
+
+            case If(cond, thn, els) => {
+                val (currentErrors, condType) = checkExpr(cond)
+                if (condType != IntType)
+                    errors += s"Expected int type in if condition ${cond}"
+                thn.foreach(checkStmt)
+                for {
+                    stmts <- els
+                } yield stmts.foreach(checkStmt)
+                (errors, condType)
+            }
+            case Decl(t, name, expr) => {
+                if (table.nameDefined(name))
+                    errors += s"Cannot redefine ${name} at ${Decl(t, name, expr)}"
+
+                val (currentErrors, rhsType) = expr match {
+                    case None => (errors, t)
+                    case Some(rhs) => checkExpr(rhs)
+                }
+
+                if (rhsType != t)
+                    errors += s"expected type ${t}, found ${expr}"
+
+                val p = PropertyStore(name).setType(t)
+                table.setPropertiesForName(name, p)
+
+                (errors, t)
+            }
         }
 
+    def checkLoopBody(body: List[ForBody]): Writer[Type] = body match {
+        case Nil => (errors, DErrorType)
+        case x :: Nil => x match {
+            case expr: Expr => checkExpr(expr)
+            case _ => {
+                errors += s"Last computation in for loop must be an expr and not a statement"
+                (errors, DErrorType)
+            }
+        }
+        case x :: xs => {
+            x match {
+                case s : Statement => checkStmt(s)
+                case  _ => {
+                    errors += s"Intermediate computations in for loops must be statements"
+                    (errors, DErrorType)
+                }
+            }
+            checkLoopBody(xs)
+        }
+    }
 
     def checkIterator(iter: Iterator): Writer[Type] = 
         iter match {
@@ -141,12 +201,12 @@ object TypeChecker {
                 var expectedIdxType: Type = IntType
 
                 if (table.nameDefined(idx))
-                   errors ++ s"Iterator ${idx} shadows another variable and is not allowed"
+                   errors += s"Iterator ${idx} shadows another variable and is not allowed"
 
                 t match {
                     case IntIterType => expectedIdxType = IntType
                     case StrIterType => expectedIdxType = StringType
-                    case _ => errors ++ s"Can only iterate over iterator types in '${idx} : ${itere}'"
+                    case _ => errors += s"Can only iterate over iterator types in '${idx} : ${itere}'"
                 }
 
                 val p = PropertyStore(idx).setType(expectedIdxType)
@@ -165,7 +225,7 @@ object TypeChecker {
         subrange match {
             case Some(range) =>
                 if (typ == IntType || typ == StringType)
-                    errors ++ s"${name} is a ${typ} which cannot have a subrange"
+                    errors += s"${name} is a ${typ} which cannot have a subrange"
             case None => {}
         }
 
@@ -175,7 +235,7 @@ object TypeChecker {
                     .setSubrange(subrange)
 
         if (table.nameDefined(name))
-            errors ++ s"Arg name${name} already previously defined"
+            errors += s"Arg name${name} already previously defined"
 
         table.setPropertiesForName(name, p)
 
@@ -213,14 +273,17 @@ object TypeChecker {
             case FunCall(name, params) => {
                 if (!table.nameDefined(name))
                     // checkFunc(name) TODO:
-                    (errors, ErrorType)
+                    (errors, DErrorType)
                 else {
-                    val expectedArity: Option[Int] = table.getPropertyForName(name, "arity")
+                    val expectedArity: Option[Property] = table.getPropertyForName(name, "arity")
                     val expectedType: Type = table.getTypeForName(name)
                     expectedArity match {
-                        case Some(arity) => if (arity != params.length)
-                                                errors ++ s"Arity mismatch for function call ${expr}"
-                        case None => errors ++ s"Couldn't figure out arity for function call ${expr}"
+                        case Some(prop) => prop match {
+                            case Arity(num) => if (num != params.length)
+                                                    errors += s"Arity mismatch for function call ${expr}"
+                            case _ => { errors += s"Expected arity at ${expectedArity}"; (errors, DErrorType) }
+                        }
+                        case None => errors += s"Couldn't figure out arity for function call ${expr}"
                     }
                     (errors, expectedType)
                 }
@@ -229,12 +292,12 @@ object TypeChecker {
             case Var(name) => if (table.nameDefined(name))
                                 (errors, table.getTypeForName(name))
                               else {
-                                errors ++ s"Var ${name} not defined before use"
-                                (errors, ErrorType)
+                                errors += s"Var ${name} not defined before use"
+                                (errors, DErrorType)
                               }
             case IntLit(num, width, signed, range) => {
                 if (!intOk(num, width, signed, range)) {
-                    errors ++ s"${expr} malformed - check width, signedness, and range constraints"
+                    errors += s"${expr} malformed - check width, signedness, and range constraints"
                 }
 
                 (errors, IntType)
@@ -247,17 +310,17 @@ object TypeChecker {
 
     def checkNumericBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
         val (_, left) = checkExpr(l)
-        if (left != IntType) errors ++ s"Expected expression of type of int at ${l}"
+        if (left != IntType) errors += s"Expected expression of type of int at ${l}"
         val (_, right) = checkExpr(r)
-        if (right != IntType) errors ++ s"Expected expression of type of int at ${r}"
+        if (right != IntType) errors += s"Expected expression of type of int at ${r}"
         (errors, IntType) 
     }
 
     def checkStringBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
         val (_, left) = checkExpr(l)
-        if (left != StringType) errors ++ s"Expected expression of type of string at ${l}"
+        if (left != StringType) errors += s"Expected expression of type of string at ${l}"
         val (_, right) = checkExpr(r)
-        if (right != StringType) errors ++ s"Expected expression of type of string at ${r}"
+        if (right != StringType) errors += s"Expected expression of type of string at ${r}"
 
         e match {
             case StrSplit(_, _) => (errors, StrIterType)
@@ -268,16 +331,16 @@ object TypeChecker {
 
     def checkIterBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
         val (_, left) = checkExpr(l)
-        if (left != StrIterType && left != IntIterType) errors ++ s"Expected expression of type of iterator at ${l}"
+        if (left != StrIterType && left != IntIterType) errors += s"Expected expression of type of iterator at ${l}"
         val (_, right) = checkExpr(r)
-        if (right != StrIterType && right != IntIterType) errors ++ s"Expected expression of type of iterator at ${r}"
-        if (right != left) errors ++ s"Expected expressions ${l} and ${r} to have same iter type"
+        if (right != StrIterType && right != IntIterType) errors += s"Expected expression of type of iterator at ${r}"
+        if (right != left) errors += s"Expected expressions ${l} and ${r} to have same iter type"
         (errors, left) 
     }
 
     def checkIterUnOp(e: Expr, l: Expr): Writer[Type] = {
         val (_, left) = checkExpr(l)
-        if (left != StrIterType && left != IntIterType) errors ++ s"Expected expression of type of iter at ${l}"
+        if (left != StrIterType && left != IntIterType) errors += s"Expected expression of type of iter at ${l}"
 
         e match {
             case IterLength(_) => (errors, IntType)
@@ -290,13 +353,13 @@ object TypeChecker {
 
     def checkStringUnop(e: Expr, l: Expr): Writer[Type] = {
         val (_, left) = checkExpr(l)
-        if (left != StringType) errors ++ s"Expected expression of type of string at ${l}"
+        if (left != StringType) errors += s"Expected expression of type of string at ${l}"
         (errors, IntType) 
     }
 
     def checkNumericUnOp(e: Expr, l: Expr): Writer[Type] = {
         val (_, left) = checkExpr(l)
-        if (left != IntType) errors ++ s"Expected expression of type of int at ${l}"
+        if (left != IntType) errors += s"Expected expression of type of int at ${l}"
 
         e match {
             case Ntos(_) => (errors, StringType)
@@ -332,10 +395,24 @@ object TypeChecker {
     def rangeOk(range: Option[Range]): Boolean = range match {
         case Some(Range(lo, hi)) => 
             if (lo > hi) {
-                errors ++ s"Lower bound on range must be less than or equal to upper bound: ${Range(lo, hi)}"
+                errors += s"Lower bound on range must be less than or equal to upper bound: ${Range(lo, hi)}"
                 false
             } else true
         case None => true
+    }
+
+    def checkAllDeclsHaveRhs(funcBody: List[Statement]): Unit = funcBody match {
+        case Nil => ()
+        case x :: xs => {
+            x match {
+                case Decl(t, name, expr) => expr match {
+                    case None => errors += s"Decl ${x} must have a RHS"
+                    case Some(_) => ()
+                }
+                case _ => ()
+            }
+            checkAllDeclsHaveRhs(xs)
+        }
     }
 
 }

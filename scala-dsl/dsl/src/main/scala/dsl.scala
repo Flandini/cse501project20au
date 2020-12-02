@@ -5,7 +5,7 @@ object AST {
     case object IntType extends Type 
     case object IntIterType extends Type
     case object StrIterType extends Type
-    case object ErrorType extends Type
+    case object DErrorType extends Type
 
     sealed trait Expr extends ForBody
 
