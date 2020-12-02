@@ -5,7 +5,8 @@ object AST {
     case object IntType extends Type 
     case object IntIterType extends Type
     case object StrIterType extends Type
-    case object DErrorType extends Type
+    case object ProgramType extends Type
+    case object ErrorType extends Type
 
     sealed trait Expr extends ForBody
 
@@ -63,8 +64,10 @@ object AST {
                    subrange: Option[Range],
                    range: Option[Range],
                    name: String)
+    case class Program(funcs: List[FuncDecl])
 
-    val dimacs_scanner: FuncDecl =
+    val dimacs_scanner: Program =
+        Program(List(
         FuncDecl(
         IntIterType, None, "scan_line", List(Arg(StringType, None, None, "clause_line")),
             List(
@@ -77,5 +80,5 @@ object AST {
 
                 Return(Var("literals"))
             )
-        )
+        )))
 } // End object AST

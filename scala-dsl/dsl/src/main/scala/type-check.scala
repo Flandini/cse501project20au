@@ -70,9 +70,9 @@ case class SymbolTable() {
     def getTypeForName(name: String): Type = getPropertyForName(name, "type") match {
             case Some(t) => t match {
                 case t: Type => t 
-                case _ => DErrorType
+                case _ => ErrorType
             }
-            case None => DErrorType
+            case None => ErrorType
         }
 
     override def toString: String = table.toString
@@ -95,7 +95,13 @@ object TypeChecker {
     var errors: Errors = ListBuffer()
     var funcStack: Stack[String] = Stack()
 
-    def checkFunc(func: FuncDecl): Writer[Type] = 
+    def check(prog: Program): Writer[Type] = {
+        prog.funcs.foreach(checkFuncSignature(_))
+        prog.funcs.foreach(checkFuncBody(_))
+        (errors, ProgramType)
+    }
+
+    def checkFuncSignature(func: FuncDecl): Writer[Type] = 
         func match {
             case FuncDecl(typ, range, name, args, body) => {
                 val p = PropertyStore(name)
@@ -107,12 +113,19 @@ object TypeChecker {
                     errors += s"Func ${name} already defined"
 
                 table.setPropertiesForName(name, p)
-                funcStack.push(name)
 
                 args.foreach(checkArg)
-                body.foreach(checkStmt)
                 checkAllDeclsHaveRhs(body)
 
+                (errors, typ)
+            }
+        }
+
+    def checkFuncBody(func: FuncDecl): Writer[Type] =
+        func match {
+            case FuncDecl(typ, range, name, args, body) => {
+                funcStack.push(name)
+                body.foreach(checkStmt)
                 funcStack.pop()
                 (errors, typ)
             }
@@ -174,12 +187,12 @@ object TypeChecker {
         }
 
     def checkLoopBody(body: List[ForBody]): Writer[Type] = body match {
-        case Nil => (errors, DErrorType)
+        case Nil => (errors, ErrorType)
         case x :: Nil => x match {
             case expr: Expr => checkExpr(expr)
             case _ => {
                 errors += s"Last computation in for loop must be an expr and not a statement"
-                (errors, DErrorType)
+                (errors, ErrorType)
             }
         }
         case x :: xs => {
@@ -187,7 +200,7 @@ object TypeChecker {
                 case s : Statement => checkStmt(s)
                 case  _ => {
                     errors += s"Intermediate computations in for loops must be statements"
-                    (errors, DErrorType)
+                    (errors, ErrorType)
                 }
             }
             checkLoopBody(xs)
@@ -271,17 +284,17 @@ object TypeChecker {
             case IterLength(l) => checkIterUnOp(expr, l)
 
             case FunCall(name, params) => {
-                if (!table.nameDefined(name))
-                    // checkFunc(name) TODO:
-                    (errors, DErrorType)
-                else {
+                if (!table.nameDefined(name)) {
+                    errors ++ s"Function ${name} not defined before use"
+                    (errors, ErrorType)
+                } else {
                     val expectedArity: Option[Property] = table.getPropertyForName(name, "arity")
                     val expectedType: Type = table.getTypeForName(name)
                     expectedArity match {
                         case Some(prop) => prop match {
                             case Arity(num) => if (num != params.length)
                                                     errors += s"Arity mismatch for function call ${expr}"
-                            case _ => { errors += s"Expected arity at ${expectedArity}"; (errors, DErrorType) }
+                            case _ => { errors += s"Expected arity at ${expectedArity}"; (errors, ErrorType) }
                         }
                         case None => errors += s"Couldn't figure out arity for function call ${expr}"
                     }
@@ -293,7 +306,7 @@ object TypeChecker {
                                 (errors, table.getTypeForName(name))
                               else {
                                 errors += s"Var ${name} not defined before use"
-                                (errors, DErrorType)
+                                (errors, ErrorType)
                               }
             case IntLit(num, width, signed, range) => {
                 if (!intOk(num, width, signed, range)) {
@@ -421,7 +434,7 @@ object Test {
     import TypeChecker._
 
     def main(args: Array[String]): Unit = {
-        val res = checkFunc(dimacs_scanner)
+        val res = check(dimacs_scanner)
         println(res)
     }
 }
