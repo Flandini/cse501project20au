@@ -10,8 +10,10 @@ import java.lang.Thread.State
 
 //import cats.data.Writer
 //import cats.syntax.writer._
-//import cats.instances.vector._
-//import cats.syntax.applicative._ // for pure
+
+import cats.instances.vector._
+import cats.syntax.applicative._ 
+import cats.syntax.either._ 
 
 case class PropertyStore(name: String) {
     var table = new HashMap[String, Property]()
@@ -80,6 +82,8 @@ case class SymbolTable() {
 
 object TypeChecker {
     type Errors = ListBuffer[String]
+    type _Error = String
+    type _Result = Either[_Error, Type]
     type Result = (Type, Errors)
 
     type Writer[A] = (Errors, A)
@@ -255,7 +259,7 @@ object TypeChecker {
         (errors, typ)
     }
 
-    def checkExpr(expr: Expr): Writer[Type] = {
+    def checkExpr(expr: Expr): Either[_Error, Type] = {
         expr match {
             case Add(l, r) => checkNumericBinOp(expr, l, r)
             case Minus(l,r) => checkNumericBinOp(expr, l, r)
@@ -302,86 +306,102 @@ object TypeChecker {
                 }
             }
 
-            case Var(name) => if (table.nameDefined(name))
-                                (errors, table.getTypeForName(name))
-                              else {
-                                errors += s"Var ${name} not defined before use"
-                                (errors, ErrorType)
-                              }
-            case IntLit(num, width, signed, range) => {
-                if (!intOk(num, width, signed, range)) {
-                    errors += s"${expr} malformed - check width, signedness, and range constraints"
-                }
-
-                (errors, IntType)
-            }
-            case StrLit(value, range) => {rangeOk(range); (errors, StringType)}
-            case IntIter(value, range) => {rangeOk(range); (errors, IntIterType)}
-            case StrIter(value, range) => {rangeOk(range); (errors, StrIterType)}
+            case Var(name) => if (table.nameDefined(name)) Right(table.getTypeForName(name))
+                              else Left(s"Var ${name} not defined before use")
+            case IntLit(num, width, signed, range) => intOk(num, width, signed, range).flatMap(_ => Right(IntType))
+            case StrLit(value, range) => rangeOk(range).flatMap(_ => Right(StringType))
+            case IntIter(value, range) => rangeOk(range).flatMap(_ => Right(IntIterType))
+            case StrIter(value, range) => rangeOk(range).flatMap(_ => Right(StrIterType))
         }
     }
 
-    def checkNumericBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
-        val (_, left) = checkExpr(l)
-        if (left != IntType) errors += s"Expected expression of type of int at ${l}"
-        val (_, right) = checkExpr(r)
-        if (right != IntType) errors += s"Expected expression of type of int at ${r}"
-        (errors, IntType) 
+    def checkNumericBinOp(e: Expr, l: Expr, r: Expr): _Result = 
+        for {
+            ltype <- checkExpr(l) 
+            _ <- if (ltype != IntType) Left(s"Expected expression of type of int at ${l}")
+                 else Right(IntType)
+            rtype <- checkExpr(r)
+            _ <- if (rtype != IntType) Left(s"Expected expression of type of int at ${r}")
+                 else Right(IntType)
+        }   yield IntType
+
+    def checkStringBinOp(e: Expr, l: Expr, r: Expr): _Result = {
+        val returnType = e match {
+            case StrSplit(_, _) => StrIterType
+            case StrEquals(_, _) => IntType
+            case _ => StringType
+        }
+        for {
+            ltype <- checkExpr(l)
+            _ <- if (ltype != StringType) Left(s"Expected expression of type of string at ${l}")
+                 else Right(StringType)
+            rtype <- checkExpr(r)
+            _ <- if (rtype != StringType) Left(s"Expected expression of type of string at ${r}")
+                 else Right(StringType)
+        } yield returnType
     }
 
-    def checkStringBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
-        val (_, left) = checkExpr(l)
-        if (left != StringType) errors += s"Expected expression of type of string at ${l}"
-        val (_, right) = checkExpr(r)
-        if (right != StringType) errors += s"Expected expression of type of string at ${r}"
+    def checkIterBinOp(e: Expr, l: Expr, r: Expr): _Result = 
+        for {
+            ltype <- checkExpr(l)
+            _ <- if (ltype != StrIterType && ltype != IntIterType) Left(s"Expected expression of type of iterator at ${l}")
+                 else Right(IntIterType) // intermediate, doesn't matter
+            rtype <- checkExpr(r)
+            _ <- if (rtype != StrIterType && rtype != IntIterType) Left(s"Expected expression of type of iterator at ${r}")
+                 else Right(IntIterType) // intermediate, doesn't matter
+            returnType <- if (ltype != rtype) Left(s"Expected expressions ${l} and ${r} to have same iter type")
+                          else Right(ltype)
+        } yield returnType 
+    /*
+        checkExpr(l).flatMap((ltype : Type) => 
+        if (...) Left(...) else Right(...).flatMap((_ : Type) => 
+        checkExpr(r).flatMap((rtype: Type) =>
+        if (...) Left(...) else Right(...).flatMap((_: Type) =>
+        if(...) Left(...) else Right(...).flatMap((returnType: Type) =>
+        Right(returnType))))))
+    */
 
-        e match {
-            case StrSplit(_, _) => (errors, StrIterType)
-            case StrEquals(_, _) => (errors, IntType)
-            case _ => (errors, StringType)
+    def checkIterUnOp(e: Expr, l: Expr): _Result = 
+        for {
+            ltype <- checkExpr(l)
+            check <- if (ltype != StrIterType && ltype != IntIterType) Left(s"Expected expression of type of iter at ${l}")
+                     else Right(ltype)
+            returnType <- inferIterUnOpType(e, ltype)
+        } yield returnType
+
+    def inferIterUnOpType(parentExp: Expr, leftType: Type): _Result = parentExp match {
+        case IterLength(_) => Right(IntType)
+        case IterFirst(_) => leftType match {
+            case StrIterType => Right(StringType)
+            case IntIterType => Right(IntType)
+            case _ => Left(s"iter_first requires an iterator as its argument")
         }
     }
 
-    def checkIterBinOp(e: Expr, l: Expr, r: Expr): Writer[Type] = {
-        val (_, left) = checkExpr(l)
-        if (left != StrIterType && left != IntIterType) errors += s"Expected expression of type of iterator at ${l}"
-        val (_, right) = checkExpr(r)
-        if (right != StrIterType && right != IntIterType) errors += s"Expected expression of type of iterator at ${r}"
-        if (right != left) errors += s"Expected expressions ${l} and ${r} to have same iter type"
-        (errors, left) 
-    }
+    def checkStringUnop(e: Expr, l: Expr): _Result =
+        for {
+            ltype <- checkExpr(l)
+            check <- if (ltype != StringType) Left(s"Expected expression of type of string at ${l}")
+                     else Right(ltype)
+        } yield check
 
-    def checkIterUnOp(e: Expr, l: Expr): Writer[Type] = {
-        val (_, left) = checkExpr(l)
-        if (left != StrIterType && left != IntIterType) errors += s"Expected expression of type of iter at ${l}"
-
-        e match {
-            case IterLength(_) => (errors, IntType)
-            case IterFirst(_) => left match {
-                case StrIterType => (errors, StringType)
-                case IntIterType => (errors, IntType)
-            }
-        }
-    }
-
-    def checkStringUnop(e: Expr, l: Expr): Writer[Type] = {
-        val (_, left) = checkExpr(l)
-        if (left != StringType) errors += s"Expected expression of type of string at ${l}"
-        (errors, IntType) 
-    }
-
-    def checkNumericUnOp(e: Expr, l: Expr): Writer[Type] = {
-        val (_, left) = checkExpr(l)
-        if (left != IntType) errors += s"Expected expression of type of int at ${l}"
-
-        e match {
+    def checkNumericUnOp(e: Expr, l: Expr): _Result = {
+        val returnType = e match {
             case Ntos(_) => (errors, StringType)
             case _ => (errors, IntType) 
         }
+        for {
+            ltype <- checkExpr(l)
+            check <- if (ltype != IntType) Left(s"Expected expression of type of int at ${l}")
+                     else Right(ltype)
+        } yield check
     }
 
-    def intOk(num: Int, width: Int, signed: Boolean, range: Option[Range]): Boolean = {
-        if (!rangeOk(range)) return false
+    def intOk(num: Int, width: Int, signed: Boolean, range: Option[Range]): Either[_Error, Boolean] = {
+        rangeOk(range) match {
+            case Right(b) => b
+            case Left(error) => return Left(error)
+        }
 
         var lowerBound = if (signed) BigInt(-(2 ^ (width - 1))) else BigInt(0)
         var upperBound = if (signed) BigInt(2 ^ (width - 1) - 1) else BigInt(2 ^ width - 1)
@@ -402,16 +422,14 @@ object TypeChecker {
 
         val normalizedNum = BigInt(num)
 
-        lowerBound <= normalizedNum && normalizedNum <= upperBound
+        Right(lowerBound <= normalizedNum && normalizedNum <= upperBound)
     }
 
-    def rangeOk(range: Option[Range]): Boolean = range match {
+    def rangeOk(range: Option[Range]): Either[_Error, Boolean] = range match {
         case Some(Range(lo, hi)) => 
-            if (lo > hi) {
-                errors += s"Lower bound on range must be less than or equal to upper bound: ${Range(lo, hi)}"
-                false
-            } else true
-        case None => true
+            if (lo > hi) Left(s"Lower bound on range must be less than or equal to upper bound: ${Range(lo, hi)}")
+            else Right(true)
+        case None => Right(true)
     }
 
     def checkAllDeclsHaveRhs(funcBody: List[Statement]): Unit = funcBody match {
