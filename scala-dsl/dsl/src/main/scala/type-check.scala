@@ -190,46 +190,41 @@ object TypeChecker {
             }
         }
 
-    def checkLoopBody(body: List[ForBody]): Writer[Type] = body match {
-        case Nil => (errors, ErrorType)
+    def checkLoopBody(body: List[ForBody]): _Result = body match {
+        case Nil => Left(s"Function bodies cannot be empty")
         case x :: Nil => x match {
             case expr: Expr => checkExpr(expr)
-            case _ => {
-                errors += s"Last computation in for loop must be an expr and not a statement"
-                (errors, ErrorType)
-            }
+            case _ => Left(s"Last computation in for loop must be an expr and not a statement")
         }
         case x :: xs => {
             x match {
                 case s : Statement => checkStmt(s)
-                case  _ => {
-                    errors += s"Intermediate computations in for loops must be statements"
-                    (errors, ErrorType)
-                }
+                case _ => Left(s"Intermediate computations in for loops must be statements")
             }
             checkLoopBody(xs)
         }
     }
 
-    def checkIterator(iter: Iterator): Writer[Type] = 
+    def checkIterator(iter: Iterator): _Result = 
         iter match {
-            case Iterator(idx, itere) => {                
-                val (errors, t) = checkExpr(itere)
-                var expectedIdxType: Type = IntType
+            case Iterator(idx, itere) => {         
+                val expectedType = for {
+                    t <- checkExpr(itere)
+                    _ <- if (table.nameDefined(idx)) Left(s"Iterator ${idx} shadows another variable and is not allowed")
+                         else Right(ErrorType)
+                    expectedIdxType <- if (t == IntIterType) Right(IntType)
+                                       else if (t == StrIterType) Right(StringType)
+                                       else Left(s"Can only interate over iterator types in '${idx} : ${itere}'")
+                } yield expectedIdxType
 
-                if (table.nameDefined(idx))
-                   errors += s"Iterator ${idx} shadows another variable and is not allowed"
-
-                t match {
-                    case IntIterType => expectedIdxType = IntType
-                    case StrIterType => expectedIdxType = StringType
-                    case _ => errors += s"Can only iterate over iterator types in '${idx} : ${itere}'"
+                expectedType match {
+                    case Left(err) => Left(err)
+                    case Right(t) => {
+                        val p = PropertyStore(idx).setType(t)
+                        table.setPropertiesForName(idx, p)
+                        Right(t)
+                    }
                 }
-
-                val p = PropertyStore(idx).setType(expectedIdxType)
-                table.setPropertiesForName(idx, p)
-
-                (errors, t)
             }
         }
 
@@ -288,27 +283,32 @@ object TypeChecker {
             case IterLength(l) => checkIterUnOp(expr, l)
 
             case FunCall(name, params) => {
-                if (!table.nameDefined(name)) {
-                    errors ++ s"Function ${name} not defined before use"
-                    (errors, ErrorType)
-                } else {
+                if (!table.nameDefined(name))
+                    Left(s"Function ${name} not defined before use")
+                else {
                     val expectedArity: Option[Property] = table.getPropertyForName(name, "arity")
                     val expectedType: Type = table.getTypeForName(name)
+
                     expectedArity match {
                         case Some(prop) => prop match {
-                            case Arity(num) => if (num != params.length)
-                                                    errors += s"Arity mismatch for function call ${expr}"
-                            case _ => { errors += s"Expected arity at ${expectedArity}"; (errors, ErrorType) }
+                            case Arity(num) => if (num != params.length) Left(s"Arity mismatch for function call ${expr}")
+                                               else Right(expectedType)
+                            case _ => Left(s"Expected arity at ${expectedArity}")
                         }
-                        case None => errors += s"Couldn't figure out arity for function call ${expr}"
+                        case None => Left(s"Couldn't figure out arity for function call ${expr}")
                     }
-                    (errors, expectedType)
                 }
             }
 
             case Var(name) => if (table.nameDefined(name)) Right(table.getTypeForName(name))
                               else Left(s"Var ${name} not defined before use")
-            case IntLit(num, width, signed, range) => intOk(num, width, signed, range).flatMap(_ => Right(IntType))
+            case IntLit(num, width, signed, range) => 
+                for {
+                    rangeCheck <- rangeOk(range)
+                    intCheck <- intOk(num, width, signed, range)
+                    retType <- if (intCheck) Right(IntType)
+                               else Left(s"Int lit ${IntLit(num, width, signed, range)} invalid")
+                } yield retType
             case StrLit(value, range) => rangeOk(range).flatMap(_ => Right(StringType))
             case IntIter(value, range) => rangeOk(range).flatMap(_ => Right(IntIterType))
             case StrIter(value, range) => rangeOk(range).flatMap(_ => Right(StrIterType))
@@ -323,7 +323,7 @@ object TypeChecker {
             rtype <- checkExpr(r)
             _ <- if (rtype != IntType) Left(s"Expected expression of type of int at ${r}")
                  else Right(IntType)
-        }   yield IntType
+        } yield IntType
 
     def checkStringBinOp(e: Expr, l: Expr, r: Expr): _Result = {
         val returnType = e match {
@@ -352,15 +352,7 @@ object TypeChecker {
             returnType <- if (ltype != rtype) Left(s"Expected expressions ${l} and ${r} to have same iter type")
                           else Right(ltype)
         } yield returnType 
-    /*
-        checkExpr(l).flatMap((ltype : Type) => 
-        if (...) Left(...) else Right(...).flatMap((_ : Type) => 
-        checkExpr(r).flatMap((rtype: Type) =>
-        if (...) Left(...) else Right(...).flatMap((_: Type) =>
-        if(...) Left(...) else Right(...).flatMap((returnType: Type) =>
-        Right(returnType))))))
-    */
-
+ 
     def checkIterUnOp(e: Expr, l: Expr): _Result = 
         for {
             ltype <- checkExpr(l)
@@ -398,11 +390,6 @@ object TypeChecker {
     }
 
     def intOk(num: Int, width: Int, signed: Boolean, range: Option[Range]): Either[_Error, Boolean] = {
-        rangeOk(range) match {
-            case Right(b) => b
-            case Left(error) => return Left(error)
-        }
-
         var lowerBound = if (signed) BigInt(-(2 ^ (width - 1))) else BigInt(0)
         var upperBound = if (signed) BigInt(2 ^ (width - 1) - 1) else BigInt(2 ^ width - 1)
 
