@@ -78,32 +78,20 @@ case class SymbolTable() {
 }
 
 object TypeChecker {
-    type Errors = ListBuffer[String]
-    type _Error = String
-    type _Result = Either[_Error, Type]
-    type Result = (Type, Errors)
-
-    type Writer[A] = (Errors, A)
-    def unit[A](a: A): Writer[A] = (ListBuffer(), a)
-    def error(msg: String): Writer[Unit] = (ListBuffer(msg), ())
-    def flatMap[A, B](a: Writer[A], b: A => Writer[B]): Writer[B] = {
-        val (errs, value) = a
-        val (newerrs, newvalue) = b(value)
-        (errs ++ newerrs, newvalue)
-    }
+    type Error = String
+    type Result = Either[Error, Type]
 
     var table: SymbolTable = new SymbolTable()
-    var errors: Errors = ListBuffer()
     var funcStack: Stack[String] = Stack()
 
-    def check(prog: Program): _Result =
+    def check(prog: Program): Result =
         for {
             firstPassCheck <- shortCircuitListCheck(prog.funcs, checkFuncSignature)
             secondPassCheck <- shortCircuitListCheck(prog.funcs, checkFuncBody)
         } yield secondPassCheck
 
     @tailrec
-    def shortCircuitListCheck[A](lst: List[A], f: A => _Result): _Result = lst match {
+    def shortCircuitListCheck[A](lst: List[A], f: A => Result): Result = lst match {
         case Nil => Right(ProgramType)
         case x :: Nil => f(x)
         case x :: xs => f(x) match {
@@ -111,10 +99,11 @@ object TypeChecker {
             case Right(t) => shortCircuitListCheck(xs, f)
         }
     }
-    def checkStmts(stmts: List[Statement]): _Result = shortCircuitListCheck(stmts, checkStmt)
-    def checkArgs(args: List[Arg]): _Result = shortCircuitListCheck(args, checkArg)
+    def checkStmts(stmts: List[Statement]): Result = shortCircuitListCheck(stmts, checkStmt)
+    def checkArgs(args: List[Arg]): Result = shortCircuitListCheck(args, checkArg)
+    def checkAllDeclsHaveRhs(stmts: List[Statement]): Result = shortCircuitListCheck(stmts, checkDeclHasRhs)
 
-    def checkFuncSignature(func: FuncDecl): _Result = 
+    def checkFuncSignature(func: FuncDecl): Result = 
         func match {
             case FuncDecl(typ, range, name, args, body) => {
                 val p = PropertyStore(name)
@@ -127,14 +116,14 @@ object TypeChecker {
 
                 table.setPropertiesForName(name, p)
 
-                val res = args.foreach(checkArg)
-                checkAllDeclsHaveRhs(body)
-
-                Right(typ)
+                for {
+                    argsT <- checkArgs(args)
+                    declsT <- checkAllDeclsHaveRhs(body)
+                } yield typ
             }
         }
 
-    def checkFuncBody(func: FuncDecl): _Result =
+    def checkFuncBody(func: FuncDecl): Result =
         func match {
             case FuncDecl(typ, range, name, args, body) => {
                 funcStack.push(name)
@@ -144,7 +133,7 @@ object TypeChecker {
             }
         }
         
-    def checkStmt(stmt: Statement): _Result =
+    def checkStmt(stmt: Statement): Result =
         stmt match {
             case Return(expr) => checkExpr(expr) match {
                     case Left(err) => Left(err)
@@ -168,6 +157,7 @@ object TypeChecker {
                 for {
                     iter1t <- checkIterator(iter1)
                     iter2t <- iter2type
+                    acct <- checkStmt(acc)
                     bodyT <- checkLoopBody(body)
                 } yield bodyT
             }
@@ -209,7 +199,7 @@ object TypeChecker {
         }
 
     @tailrec
-    def checkLoopBody(body: List[ForBody]): _Result = body match {
+    def checkLoopBody(body: List[ForBody]): Result = body match {
         case Nil => Left(s"Function bodies cannot be empty")
         case x :: Nil => x match {
             case expr: Expr => checkExpr(expr)
@@ -224,7 +214,7 @@ object TypeChecker {
         }
     }
 
-    def checkIterator(iter: Iterator): _Result = 
+    def checkIterator(iter: Iterator): Result = 
         iter match {
             case Iterator(idx, itere) => {         
                 val expectedType = for {
@@ -247,7 +237,7 @@ object TypeChecker {
             }
         }
 
-    def checkArg(arg: Arg): _Result = {
+    def checkArg(arg: Arg): Result = {
         val typ = arg.t
         val subrange = arg.subrange
         val range = arg.range
@@ -273,7 +263,7 @@ object TypeChecker {
         Right(typ)
     }
 
-    def checkExpr(expr: Expr): Either[_Error, Type] = {
+    def checkExpr(expr: Expr): Either[Error, Type] = {
         expr match {
             case Add(l, r) => checkNumericBinOp(expr, l, r)
             case Minus(l,r) => checkNumericBinOp(expr, l, r)
@@ -336,7 +326,7 @@ object TypeChecker {
         }
     }
 
-    def checkNumericBinOp(e: Expr, l: Expr, r: Expr): _Result = 
+    def checkNumericBinOp(e: Expr, l: Expr, r: Expr): Result = 
         for {
             ltype <- checkExpr(l) 
             _ <- if (ltype != IntType) Left(s"Expected expression of type of int at ${l}")
@@ -346,7 +336,7 @@ object TypeChecker {
                  else Right(IntType)
         } yield IntType
 
-    def checkStringBinOp(e: Expr, l: Expr, r: Expr): _Result = {
+    def checkStringBinOp(e: Expr, l: Expr, r: Expr): Result = {
         val returnType = e match {
             case StrSplit(_, _) => StrIterType
             case StrEquals(_, _) => IntType
@@ -362,7 +352,7 @@ object TypeChecker {
         } yield returnType
     }
 
-    def checkIterBinOp(e: Expr, l: Expr, r: Expr): _Result = 
+    def checkIterBinOp(e: Expr, l: Expr, r: Expr): Result = 
         for {
             ltype <- checkExpr(l)
             _ <- if (ltype != StrIterType && ltype != IntIterType) Left(s"Expected expression of type of iterator at ${l}")
@@ -374,7 +364,7 @@ object TypeChecker {
                           else Right(ltype)
         } yield returnType 
  
-    def checkIterUnOp(e: Expr, l: Expr): _Result = 
+    def checkIterUnOp(e: Expr, l: Expr): Result = 
         for {
             ltype <- checkExpr(l)
             check <- if (ltype != StrIterType && ltype != IntIterType) Left(s"Expected expression of type of iter at ${l}")
@@ -382,7 +372,7 @@ object TypeChecker {
             returnType <- inferIterUnOpType(e, ltype)
         } yield returnType
 
-    def inferIterUnOpType(parentExp: Expr, leftType: Type): _Result = parentExp match {
+    def inferIterUnOpType(parentExp: Expr, leftType: Type): Result = parentExp match {
         case IterLength(_) => Right(IntType)
         case IterFirst(_) => leftType match {
             case StrIterType => Right(StringType)
@@ -391,26 +381,26 @@ object TypeChecker {
         }
     }
 
-    def checkStringUnop(e: Expr, l: Expr): _Result =
+    def checkStringUnop(e: Expr, l: Expr): Result =
         for {
             ltype <- checkExpr(l)
             check <- if (ltype != StringType) Left(s"Expected expression of type of string at ${l}")
                      else Right(ltype)
         } yield check
 
-    def checkNumericUnOp(e: Expr, l: Expr): _Result = {
+    def checkNumericUnOp(e: Expr, l: Expr): Result = {
         val returnType = e match {
-            case Ntos(_) => (errors, StringType)
-            case _ => (errors, IntType) 
+            case Ntos(_) => StringType
+            case _ => IntType
         }
         for {
             ltype <- checkExpr(l)
             check <- if (ltype != IntType) Left(s"Expected expression of type of int at ${l}")
                      else Right(ltype)
-        } yield check
+        } yield returnType
     }
 
-    def intOk(num: Int, width: Int, signed: Boolean, range: Option[Range]): Either[_Error, Boolean] = {
+    def intOk(num: Int, width: Int, signed: Boolean, range: Option[Range]): Either[Error, Boolean] = {
         var lowerBound = if (signed) BigInt(-(2 ^ (width - 1))) else BigInt(0)
         var upperBound = if (signed) BigInt(2 ^ (width - 1) - 1) else BigInt(2 ^ width - 1)
 
@@ -433,27 +423,20 @@ object TypeChecker {
         Right(lowerBound <= normalizedNum && normalizedNum <= upperBound)
     }
 
-    def rangeOk(range: Option[Range]): Either[_Error, Boolean] = range match {
+    def rangeOk(range: Option[Range]): Either[Error, Boolean] = range match {
         case Some(Range(lo, hi)) => 
             if (lo > hi) Left(s"Lower bound on range must be less than or equal to upper bound: ${Range(lo, hi)}")
             else Right(true)
         case None => Right(true)
     }
 
-    def checkAllDeclsHaveRhs(funcBody: List[Statement]): Unit = funcBody match {
-        case Nil => ()
-        case x :: xs => {
-            x match {
-                case Decl(t, name, expr) => expr match {
-                    case None => errors += s"Decl ${x} must have a RHS"
-                    case Some(_) => ()
-                }
-                case _ => ()
-            }
-            checkAllDeclsHaveRhs(xs)
+    def checkDeclHasRhs(stmt: Statement): Result = stmt match {
+        case Decl(t, name, expr) => expr match {
+            case None => Left(s"Declaration of var ${name} much have a rhs")
+            case Some(_) => Right(ProgramType)
         }
+        case _ => Right(ProgramType)
     }
-
 }
 
 object Test {
