@@ -1,15 +1,12 @@
 
 import AST._ 
+
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.Stack
 import scala.collection.immutable.Vector
 import scala.collection.mutable.ListBuffer
-
 import scala.math.BigInt
-import java.lang.Thread.State
-
-//import cats.data.Writer
-//import cats.syntax.writer._
+import scala.annotation.tailrec
 
 import cats.instances.vector._
 import cats.syntax.applicative._ 
@@ -99,13 +96,25 @@ object TypeChecker {
     var errors: Errors = ListBuffer()
     var funcStack: Stack[String] = Stack()
 
-    def check(prog: Program): Writer[Type] = {
-        prog.funcs.foreach(checkFuncSignature(_))
-        prog.funcs.foreach(checkFuncBody(_))
-        (errors, ProgramType)
-    }
+    def check(prog: Program): _Result =
+        for {
+            firstPassCheck <- shortCircuitListCheck(prog.funcs, checkFuncSignature)
+            secondPassCheck <- shortCircuitListCheck(prog.funcs, checkFuncBody)
+        } yield secondPassCheck
 
-    def checkFuncSignature(func: FuncDecl): Writer[Type] = 
+    @tailrec
+    def shortCircuitListCheck[A](lst: List[A], f: A => _Result): _Result = lst match {
+        case Nil => Right(ProgramType)
+        case x :: Nil => f(x)
+        case x :: xs => f(x) match {
+            case Left(err) => Left(err)
+            case Right(t) => shortCircuitListCheck(xs, f)
+        }
+    }
+    def checkStmts(stmts: List[Statement]): _Result = shortCircuitListCheck(stmts, checkStmt)
+    def checkArgs(args: List[Arg]): _Result = shortCircuitListCheck(args, checkArg)
+
+    def checkFuncSignature(func: FuncDecl): _Result = 
         func match {
             case FuncDecl(typ, range, name, args, body) => {
                 val p = PropertyStore(name)
@@ -114,82 +123,92 @@ object TypeChecker {
                             .setArity(args.length)
 
                 if (table.nameDefined(name))
-                    errors += s"Func ${name} already defined"
+                    return Left(s"Func ${name} already defined")
 
                 table.setPropertiesForName(name, p)
 
-                args.foreach(checkArg)
+                val res = args.foreach(checkArg)
                 checkAllDeclsHaveRhs(body)
 
-                (errors, typ)
+                Right(typ)
             }
         }
 
-    def checkFuncBody(func: FuncDecl): Writer[Type] =
+    def checkFuncBody(func: FuncDecl): _Result =
         func match {
             case FuncDecl(typ, range, name, args, body) => {
                 funcStack.push(name)
-                body.foreach(checkStmt)
+                val res = checkStmts(body)
                 funcStack.pop()
-                (errors, typ)
+                res
             }
         }
-
-    def checkStmt(stmt: Statement): Writer[Type] =
+        
+    def checkStmt(stmt: Statement): _Result =
         stmt match {
-            case Return(expr) => {
-                val (preverrors, typ) = checkExpr(expr)
-                val currentFunc = funcStack.top
-                val expectedReturnType = table.getPropertyForName(currentFunc, "type")
+            case Return(expr) => checkExpr(expr) match {
+                    case Left(err) => Left(err)
+                    case Right(t) => {
+                        val currentFunc = funcStack.top
+                        val expectedReturnType = table.getPropertyForName(currentFunc, "type")
 
-                if (!expectedReturnType.contains(typ))
-                    errors += s"Return type of ${expr} doesnt match expected ${expectedReturnType}"
-
-                (errors, typ)
-            }
+                        if (!expectedReturnType.contains(t))
+                            Left(s"Return type of ${expr} doesnt match expected ${expectedReturnType}")
+                        else
+                            Right(t)
+                    }
+                }
 
             case For(iter1, iter2, acc, body) => {
-                checkIterator(iter1)
-                iter2 match {
+                val iter2type = iter2 match {
                     case Some(iter) => checkIterator(iter)
-                    case None => None
+                    case None => Right(IntType) //placeholder, doesn't matter
                 }
-                acc match {
-                    case Decl(_, _, _) => checkStmt(acc)
-                    case _ => errors += s"Accumulator for range ${stmt} malformed"
-                }
-                checkLoopBody(body)
+
+                for {
+                    iter1t <- checkIterator(iter1)
+                    iter2t <- iter2type
+                    bodyT <- checkLoopBody(body)
+                } yield bodyT
             }
 
             case If(cond, thn, els) => {
-                val (currentErrors, condType) = checkExpr(cond)
-                if (condType != IntType)
-                    errors += s"Expected int type in if condition ${cond}"
-                thn.foreach(checkStmt)
-                for {
-                    stmts <- els
-                } yield stmts.foreach(checkStmt)
-                (errors, condType)
+                val thnType = for {
+                    condType <- checkExpr(cond)
+                    res <- if (condType != IntType) Left(s"Expected int type in if condition ${cond}")
+                           else Right(condType)
+                    thnType <- checkStmts(thn)
+                } yield thnType
+
+                thnType match {
+                    case Left(err) => Left(err)
+                    case Right(t) => els match {
+                        case None => Right(t)
+                        case Some(stmts) => checkStmts(stmts)
+                    }
+                }
             }
+
             case Decl(t, name, expr) => {
                 if (table.nameDefined(name))
-                    errors += s"Cannot redefine ${name} at ${Decl(t, name, expr)}"
+                    return Left(s"Cannot redefine ${name} at ${Decl(t, name, expr)}")
 
-                val (currentErrors, rhsType) = expr match {
-                    case None => (errors, t)
-                    case Some(rhs) => checkExpr(rhs)
+                val rhsType = expr match {
+                    case None => Right(t)
+                    case Some(rhs) => checkExpr(rhs) match {
+                        case Left(err) => return Left(err)
+                        case Right(t) => Right(t)
+                    }
                 }
-
-                if (rhsType != t)
-                    errors += s"expected type ${t}, found ${expr}"
 
                 val p = PropertyStore(name).setType(t)
                 table.setPropertiesForName(name, p)
 
-                (errors, t)
+                Right(t)
             }
         }
 
+    @tailrec
     def checkLoopBody(body: List[ForBody]): _Result = body match {
         case Nil => Left(s"Function bodies cannot be empty")
         case x :: Nil => x match {
@@ -228,7 +247,7 @@ object TypeChecker {
             }
         }
 
-    def checkArg(arg: Arg): Writer[Type] = {
+    def checkArg(arg: Arg): _Result = {
         val typ = arg.t
         val subrange = arg.subrange
         val range = arg.range
@@ -237,7 +256,7 @@ object TypeChecker {
         subrange match {
             case Some(range) =>
                 if (typ == IntType || typ == StringType)
-                    errors += s"${name} is a ${typ} which cannot have a subrange"
+                    return Left(s"${name} is a ${typ} which cannot have a subrange")
             case None => {}
         }
 
@@ -247,11 +266,11 @@ object TypeChecker {
                     .setSubrange(subrange)
 
         if (table.nameDefined(name))
-            errors += s"Arg name${name} already previously defined"
+            return Left(s"Arg name${name} already previously defined")
 
         table.setPropertiesForName(name, p)
 
-        (errors, typ)
+        Right(typ)
     }
 
     def checkExpr(expr: Expr): Either[_Error, Type] = {
@@ -285,6 +304,8 @@ object TypeChecker {
             case FunCall(name, params) => {
                 if (!table.nameDefined(name))
                     Left(s"Function ${name} not defined before use")
+                else if (funcStack.top == name)
+                    Left(s"Recursion is not allowed.")
                 else {
                     val expectedArity: Option[Property] = table.getPropertyForName(name, "arity")
                     val expectedType: Type = table.getTypeForName(name)
