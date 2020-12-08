@@ -9,7 +9,6 @@ object AST {
     case object ErrorType extends Type
 
     sealed trait Expr extends ForBody
-
     // Numeric ops
     case class Add(left: Expr, right: Expr) extends Expr
     case class Minus(left: Expr, right: Expr) extends Expr
@@ -45,8 +44,8 @@ object AST {
     case class Var(name: String) extends Term
     case class IntLit(num: Int, width: Int, signed: Boolean, range: Option[Range]) extends Term
     case class StrLit(value: String, range: Option[Range]) extends Term
-    case class IntIter(value: List[IntLit], range: Option[Range]) extends Term
-    case class StrIter(value: List[StrLit], range: Option[Range]) extends Term
+    case class IntIter(value: List[IntLit], range: Option[Range], subrange: Option[Range]) extends Term
+    case class StrIter(value: List[StrLit], range: Option[Range], subrange: Option[Range]) extends Term
 
     sealed trait Statement extends ForBody
     case class Decl(t: Type, name: String, expr: Option[Expr]) extends Statement
@@ -81,4 +80,15 @@ object AST {
                 Return(Var("literals"))
             )
         )))
+
+    val array_average =
+        Program(List(
+        FuncDecl(
+        IntType, Some(Range(0, 255)), "array_average", List(Arg(IntIterType, Some(Range(0, 255)), Some(Range(0, 50000)), "numbers")), List(
+        For(Iterator("n", Var("numbers")), None, Decl(IntType, "acc", Some(IntLit(0, 32, true, None))), List(
+            Add(Var("acc"), Var("n"))
+        )),
+        Decl(IntType, "averagish", Some(Div(Var("acc"), IterLength(Var("numbers"))))),
+        Return(Var("averagish"))
+        ))))
 } // End object AST
