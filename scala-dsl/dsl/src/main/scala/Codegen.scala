@@ -1,6 +1,5 @@
 
 import AST._
-import javax.sql.StatementEvent
 
 object CodeGen {
     type Code = String

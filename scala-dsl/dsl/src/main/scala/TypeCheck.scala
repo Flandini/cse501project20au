@@ -386,5 +386,7 @@ object TypecheckTest {
     def main(args: Array[String]): Unit = {
         val res = check(dimacs_scanner)
         println(res)
+        val res2 = check(array_average)
+        println(res2)
     }
 }
