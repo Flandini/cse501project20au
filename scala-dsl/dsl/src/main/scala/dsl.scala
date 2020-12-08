@@ -107,7 +107,7 @@ object ExamplePrograms {
     val one_decl_one_return =
     Program(List(
         FuncDecl(
-        IntType, Some(Range(0, 255)), "array_average", List(Arg(IntType, None, Some(Range(0, 256)), "input")), List(
+        IntType, Some(Range(0, 255)), "array_average", List(Arg(IntType, None, Some(Range(0, 255)), "input")), List(
         Decl(IntDeclType(signed, 32), "averageish", Some(Var("input"))),
         Return(Var("averageish"))
         ))))

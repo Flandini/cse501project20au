@@ -57,12 +57,13 @@ object SafetyChecks {
     // 2) Add all args constraints to environment
     // 3) Check all statements
     def checkFunc(func: FuncDecl, env: Env): Result = func match {
-        case FuncDecl(typ, range, name, args, body) =>  
+        case FuncDecl(typ, range, name, args, body) => {
             val funcConstraints = ("returnType", typ, rangeToInterval(range), None, None)
             for {
                 funcEnv <- checkArgs(args, funcConstraints :: env)
                 resultEnv <- checkStmts(body, funcEnv)
             } yield resultEnv
+        }
     }
 
     // Each arg just needs to be entered into the environment.
@@ -182,6 +183,98 @@ object SafetyChecks {
         case i : IntLit => intLitToInterval(i)
         case iit : IntIter => intIterToInterval(iit)
         case sit : StrIter => strIterToInterval(sit)
+        case Add(left, right) => 
+            for {
+                lhs <- checkExpr(left, env)
+                rhs <- checkExpr(right,env)
+                exprRes <- Right(("", IntType, Interval.opt_join(lhs._3, rhs._3), Interval.opt_join(lhs._4, rhs._4), Interval.binop(Interval.plus, lhs._5, rhs._5)))
+                res <- if (!Interval.containedIn(exprRes._5, exprRes._3))
+                            Left(s"${expr} doesn't fit in expected range: ${exprRes._3}")
+                        else
+                            Right(exprRes)
+            } yield res
+        case Minus(left, right) => 
+            for {
+                lhs <- checkExpr(left, env)
+                rhs <- checkExpr(right,env)
+                exprRes <- Right(("", IntType, Interval.opt_join(lhs._3, rhs._3), Interval.opt_join(lhs._4, rhs._4), Interval.binop(Interval.minus, lhs._5, rhs._5)))
+                res <- if (!Interval.containedIn(exprRes._5, exprRes._3))
+                            Left(s"${expr} doesn't fit in expected range: ${exprRes._3}")
+                        else
+                            Right(exprRes)
+            } yield res
+        case Mult(left, right) => 
+            for {
+                lhs <- checkExpr(left, env)
+                rhs <- checkExpr(right,env)
+                exprRes <- Right(("", IntType, Interval.opt_join(lhs._3, rhs._3), Interval.opt_join(lhs._4, rhs._4), Interval.binop(Interval.mult, lhs._5, rhs._5)))
+                res <- if (!Interval.containedIn(exprRes._5, exprRes._3))
+                            Left(s"${expr} doesn't fit in expected range: ${exprRes._3}")
+                        else
+                            Right(exprRes)
+            } yield res
+        case Div(left, right) => 
+            for {
+                lhs <- checkExpr(left, env)
+                rhs <- checkExpr(right,env)
+                exprRes <- Right(("", IntType, Interval.opt_join(lhs._3, rhs._3), Interval.opt_join(lhs._4, rhs._4), Interval.binop(Interval.div, lhs._5, rhs._5)))
+                res <- if (!Interval.containedIn(exprRes._5, exprRes._3))
+                            Left(s"${expr} doesn't fit in expected range: ${exprRes._3}")
+                        else
+                            Right(exprRes)
+            } yield res
+        case Eq(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+        case Lte(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+        case Lt(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+        case Gte(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+        case Gt(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+        case Eq(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+
+        case Or(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+        case And(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+
+        case Not(left) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+
+        case Ntos(left) => checkExpr(left, env) match {
+            case Right((_, t, range, subrange, value)) => {
+                
+                (range, value) match {
+                    case (Some(a), Some(b)) => {
+                        if (!Interval.containedIn(b, a))
+                            Left(s"${left} doesn't fit in expected range: ${range}")
+                    }
+                    case _ => {}
+                }
+
+                val stringRange = value match {
+                    case Some(Interval(lo, hi)) => Some(Interval.fromBigInts(0, digitsInBigInt(lo).max(digitsInBigInt(hi))))
+                }
+
+                Right(("", StringType, stringRange, None, None))
+            }
+            case Left(err) => Left(err)
+        }
+
+        case Ston(left) => checkExpr(left, env) match {
+            case Right((_, t, range, subrange, value)) => {
+
+                val stringRange = value match {
+                    case Some(Interval(lo, hi)) => Some(Interval.fromBigInts(0, digitsInBigInt(lo).max(digitsInBigInt(hi))))
+                }
+
+                val intRange = range match {
+                    case None => Some(Interval.intervalTop)
+                    case Some(intrvl) => intrvl match {
+                        case Interval(lo, hi) => Some(Interval.fromBigInts(stringLengthToLowDigit(lo), stringLengthToHighDigit(hi)))
+                        case Bottom => Some(Interval.intervalTop)
+                    }
+                }
+
+                Right(("", IntType, intRange, None, intRange))
+            }
+            case Left(err) => Left(err)
+        }
+
         case Var(name) => lookup(name, env).flatMap(varinfo => Right(varinfo))
     }
 
@@ -236,6 +329,28 @@ object SafetyChecks {
             ("", IntType, Some(Interval.fromBigInts(lowerBound, upperBound)), None, Some(Interval.fromInt(n)))
         )
     }
+
+    // include unary minus sign
+    def digitsInBigInt(num: BigInt): BigInt =
+        if (num.equals(BigInt(0)))
+            0
+        else if (num < BigInt(0))
+            1 + digitsInBigInt(num.abs)
+        else
+            1 + digitsInBigInt(num / BigInt(10))
+
+    def stringLengthToLowDigit(len: BigInt, tmp: String = ""): BigInt =
+        if (tmp.length() == len - 1)
+            BigInt(("-" ++ tmp).toInt)
+        else
+            stringLengthToLowDigit(len, tmp ++ "9")
+
+    def stringLengthToHighDigit(len: BigInt, tmp: String = ""): BigInt =
+        if (tmp.length() == len)
+            BigInt(tmp.toInt)
+        else
+            stringLengthToHighDigit(len, tmp ++ "9")
+
 }
 
 

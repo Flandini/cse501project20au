@@ -9,6 +9,8 @@ case class Interval(lo: BigInt, hi: BigInt) extends IntervalLatticeElement
 case object Bottom extends IntervalLatticeElement
 
 object Interval extends Lattice[IntervalLatticeElement]  {
+    type IntervalBinop = (IntervalLatticeElement, IntervalLatticeElement) => IntervalLatticeElement
+
     val most = BigInt(Long.MaxValue)
     val least = BigInt(Long.MinValue)
     
@@ -23,11 +25,27 @@ object Interval extends Lattice[IntervalLatticeElement]  {
     def min(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.min(b).min(c).min(d)
     def max(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.max(b).max(c).max(d)
 
+    def intervalTop: IntervalLatticeElement = Interval.fromBigInts(least, most)
+
+    def containsNegatives(i: IntervalLatticeElement): Boolean = i match {
+        case Bottom => false
+        case Interval(lo, hi) => lo <= 0 || hi <= 0
+    }
+
     def join(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): IntervalLatticeElement = (lhs, rhs) match {
         case (Bottom, other) => other
         case (other, Bottom) => other
         case (Interval(a, b), Interval(c, d)) => Interval(a.min(c), b.max(d))
     }
+
+    def opt_join(lhs: Option[IntervalLatticeElement], rhs: Option[IntervalLatticeElement]): Option[IntervalLatticeElement] = 
+        lhs match {
+            case None => rhs
+            case Some(l) => rhs match {
+                case None => lhs
+                case Some(r) => Some(join(l,r))
+            }
+        }
 
     def meet(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): IntervalLatticeElement = (lhs, rhs) match {
         case (Bottom, other) => Bottom
@@ -44,6 +62,12 @@ object Interval extends Lattice[IntervalLatticeElement]  {
             }
         }
 
+    def binop(op: IntervalBinop, lhs: Option[IntervalLatticeElement], rhs: Option[IntervalLatticeElement]): Option[IntervalLatticeElement] =
+        for {
+            l <- lhs
+            r <- rhs
+        } yield op(l, r)
+
     def lte(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): Boolean = (lhs, rhs) match {
         case (Bottom, _) => true
         case (_, Bottom) => false
@@ -55,6 +79,14 @@ object Interval extends Lattice[IntervalLatticeElement]  {
         case (Bottom, _) => false
         case (_, Bottom) => false
         case (Interval(a,b), Interval(c,d)) => c <= a && b <= d
+    }
+
+    def containedIn(lhs: Option[IntervalLatticeElement], rhs: Option[IntervalLatticeElement]): Boolean = lhs match {
+        case None => true
+        case Some(l) => rhs match {
+            case None => true
+            case Some(r) => containedIn(l, r)
+        }
     }
 
     // Pairwise interval widening
