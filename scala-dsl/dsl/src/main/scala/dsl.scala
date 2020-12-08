@@ -7,6 +7,10 @@ object AST {
     case object StrIterType extends Type
     case object ProgramType extends Type
     case object ErrorType extends Type
+    case class IntDeclType(signed: Boolean, width: Int) extends Type
+
+    def signed = true
+    def unsigned = false
 
     sealed trait Expr extends ForBody
     // Numeric ops
@@ -93,10 +97,18 @@ object ExamplePrograms {
         Program(List(
         FuncDecl(
         IntType, Some(Range(0, 255)), "array_average", List(Arg(IntIterType, Some(Range(0, 255)), Some(Range(0, 50000)), "numbers")), List(
-        For(Iterator("n", Var("numbers")), None, Decl(IntType, "acc", Some(IntLit(0, 32, true, None))), List(
+        For(Iterator("n", Var("numbers")), None, Decl(IntType, "acc", Some(IntLit(0, 32, signed, None))), List(
             Add(Var("acc"), Var("n"))
         )),
         Decl(IntType, "averagish", Some(Div(Var("acc"), IterLength(Var("numbers"))))),
         Return(Var("averagish"))
+        ))))
+
+    val one_decl_one_return =
+    Program(List(
+        FuncDecl(
+        IntType, Some(Range(0, 255)), "array_average", List(Arg(IntType, None, Some(Range(0, 256)), "input")), List(
+        Decl(IntDeclType(signed, 32), "averageish", Some(Var("input"))),
+        Return(Var("averageish"))
         ))))
 }

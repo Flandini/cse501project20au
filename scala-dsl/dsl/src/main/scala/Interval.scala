@@ -12,9 +12,14 @@ object Interval extends Lattice[IntervalLatticeElement]  {
     val most = BigInt(Long.MaxValue)
     val least = BigInt(Long.MinValue)
     
+    def fromBigInts(lo: BigInt, hi: BigInt): IntervalLatticeElement = Interval(lo, hi)
     def fromInt(i: Int): IntervalLatticeElement = fromBigInts(BigInt(i), BigInt(i))
     def fromInts(lo: Int, hi: Int): IntervalLatticeElement = fromBigInts(BigInt(lo), BigInt(hi))
-    def fromBigInts(lo: BigInt, hi: BigInt): IntervalLatticeElement = Interval(lo, hi)
+    def fromSignAndWidth(signed: Boolean, width: Int): IntervalLatticeElement =
+        Interval.fromBigInts(
+            if (signed) BigInt(-(Math.pow(2, (width - 1)).toInt)) else BigInt(0),
+            if (signed) BigInt(Math.pow(2, width-1).toInt - 1) else BigInt(Math.pow(2, width).toInt - 1)
+        )
     def min(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.min(b).min(c).min(d)
     def max(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.max(b).max(c).max(d)
 
@@ -30,10 +35,26 @@ object Interval extends Lattice[IntervalLatticeElement]  {
         case (Interval(a,b), Interval(c,d)) => Interval(a.max(c), b.min(d))
     }
 
+    def meet(lhs: Option[IntervalLatticeElement], rhs: Option[IntervalLatticeElement]): Option[IntervalLatticeElement] = 
+        lhs match {
+            case None => rhs
+            case Some(l) => rhs match {
+                case None => Some(l)
+                case Some(r) => Some(meet(l,r))
+            }
+        }
+
     def lte(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): Boolean = (lhs, rhs) match {
         case (Bottom, _) => true
         case (_, Bottom) => false
         case (Interval(a,b), Interval(c,d)) => a <= c && b <= d
+    }
+
+    // lhs from rhs
+    def containedIn(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): Boolean = (lhs, rhs) match {
+        case (Bottom, _) => false
+        case (_, Bottom) => false
+        case (Interval(a,b), Interval(c,d)) => c <= a && b <= d
     }
 
     // Pairwise interval widening

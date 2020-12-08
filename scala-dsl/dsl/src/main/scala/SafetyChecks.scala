@@ -8,6 +8,7 @@ import scala.annotation.tailrec
 import cats.instances.vector._
 import cats.syntax.applicative._ 
 import cats.syntax.either._ 
+import java.lang.Thread.State
 
 object SafetyChecks {
     type Errors = String
@@ -39,6 +40,18 @@ object SafetyChecks {
         case x :: xs => checkArg(x, env).flatMap(res => checkArgs(xs, res ++ env))
     }
 
+    def checkStmts(stmts: List[Statement], env: Env): Result = stmts match {
+        case Nil => Right(env)
+        case x :: xs => {
+            val parent: Option[Statement] = x match {
+                case For(iter1, iter2, acc, body) => Some(x)
+                case If(cond, thn, els) => Some(x)
+                case _ => None
+            }
+            checkStmt(x, env, parent).flatMap(res => checkStmts(xs, res ++ env))
+        }
+    }
+
     // 1) Add returnType (TODO: fix this to not use hardcoded "returnType") constraint
     //    to environment
     // 2) Add all args constraints to environment
@@ -46,7 +59,10 @@ object SafetyChecks {
     def checkFunc(func: FuncDecl, env: Env): Result = func match {
         case FuncDecl(typ, range, name, args, body) =>  
             val funcConstraints = ("returnType", typ, rangeToInterval(range), None, None)
-            checkArgs(args, funcConstraints :: env)
+            for {
+                funcEnv <- checkArgs(args, funcConstraints :: env)
+                resultEnv <- checkStmts(body, funcEnv)
+            } yield resultEnv
     }
 
     // Each arg just needs to be entered into the environment.
@@ -61,42 +77,86 @@ object SafetyChecks {
         )
     }
 
-    def checkStmt(stmt: Statement, env: Env): Result = stmt match {
+    // Parent is used when in loop or conditional to compute join
+    def checkStmt(stmt: Statement, env: Env, parent: Option[Statement]): Result = stmt match {
 
         // this is horrible
         // Must check that the interval of the result of the expr
         // is contained by the interval and type of the function
         // if the interval of the function is provided.
         case Return(expr) => lookup("returnType", env) match {
-            case Right((_, t, rangeConstraint, _, _)) => rangeConstraint match {
+
+            case Right((_, t, rangeConstraint, subRangeConstraint, _)) => rangeConstraint match {
+
                 case None => Right(env)
                 case Some(interval) => {
+
                     checkExpr(expr, env) match {
+
                         case Right((_, t, range, subrange, value)) => {
-                            value match {
-                                case Some(value) => {
-                                    if (Interval.lte(value, interval))
-                                        Right(env)
-                                    else
-                                        Left(s"${expr} does not fit in range constraint of ${interval}")
+
+                            // Check if the value on the RHS fits in the range of the RHS
+                            (value, range) match {
+                                case (Some(a), Some(b)) => {
+                                    if (!Interval.containedIn(a, b))
+                                        return Left(s"Value of ${expr} doesn't fit in needed range: ${range}")
                                 }
-                                case None => Right(env)
+                                case _ => {}
                             }
+
+                            // Check that the RHS values fit in range constraint of functino return constraints
+                            (range, rangeConstraint) match {
+                                case (Some(a), Some(b)) => {
+                                    if (!Interval.containedIn(a, b))
+                                        return Left(s"Value of ${expr} doesn't fit in needed range: ${rangeConstraint}")
+                                }
+                                case _ => {}
+                            }
+
+                            Right(env)
                         }
                         case Left(err) => Left(err)
                     }
                 }
             }
+            case Left(err) => Left(err)
         }
 
-        // Nothing to check here, just add to the env that "name" 
-        // has type t and has interval of expr
+        
         case Decl(t, name, Some(expr)) => {
+            // if Int type, will need to check that the RHS range falls within the Int type bounds
+            val optRange: Option[IntervalLatticeElement] = t match {
+                case IntDeclType(signed, width) => Some(Interval.fromSignAndWidth(signed,width))
+                case _ => None
+            }
+
             checkExpr(expr, env) match {
+                // If interval analysis passes on RHS
                 case Right((_, _, range, subrange, value)) => {
-                    val newVarInfo = (name, t, range, subrange, value)
+
+                    // Check that the value fits in the range on the RHS
+                    (value, range) match {
+                        case (Some(interval_a), Some(interval_b)) => {
+                            if (!Interval.containedIn(interval_a, interval_b))
+                                return Left(s"Value of ${expr} doesn't fit in needed range: ${range}")
+                        }
+                        case _ => {}
+                    }
+
+                    // Check that the RHS range falls in the int type bounds
+                    (optRange, range) match {
+                        case (Some(l_interval), Some(r_interval)) => {
+                            if (!Interval.containedIn(r_interval, l_interval))
+                                return Left(s"Range of expr ${expr} not within range of ${Decl(t,name,Some(expr))}")
+                        }
+                        case _ => {}
+                    }
+
+                    // Set the range for this var to the smallest range bound
+                    val newVarInfo = (name, t, meet(range, optRange), subrange, value)
                     Right(newVarInfo :: env)
                 }
+
                 case Left(err) => Left(err)
             }
         }
@@ -178,12 +238,15 @@ object SafetyChecks {
     }
 }
 
+
+
 object SafetyChecksTest {
     import SafetyChecks._ 
     import AST._
+    import ExamplePrograms._
 
     def main(args: Array[String]): Unit = {
-        val res = check(array_average)
+        val res = check(one_decl_one_return)
         println(res)
     }
 }

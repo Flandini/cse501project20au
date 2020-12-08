@@ -382,6 +382,7 @@ object TypeChecker {
 
 object TypecheckTest {
     import TypeChecker._
+    import ExamplePrograms._
 
     def main(args: Array[String]): Unit = {
         val res = check(dimacs_scanner)
