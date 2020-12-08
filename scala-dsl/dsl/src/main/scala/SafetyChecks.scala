@@ -30,6 +30,8 @@ object SafetyChecks {
                                                                     lookup(v, xs)
     }
 
+    // TODO: Fix this for hard goal of handling > 1 function. Type
+    // checker is already handling this.
     def check(p: Program): Result = checkFunc(p.funcs(0), List())
 
     def checkArgs(args: List[Arg], env: Env): Result = args match {
@@ -37,12 +39,17 @@ object SafetyChecks {
         case x :: xs => checkArg(x, env).flatMap(res => checkArgs(xs, res ++ env))
     }
 
+    // 1) Add returnType (TODO: fix this to not use hardcoded "returnType") constraint
+    //    to environment
+    // 2) Add all args constraints to environment
+    // 3) Check all statements
     def checkFunc(func: FuncDecl, env: Env): Result = func match {
         case FuncDecl(typ, range, name, args, body) =>  
             val funcConstraints = ("returnType", typ, rangeToInterval(range), None, None)
             checkArgs(args, funcConstraints :: env)
     }
 
+    // Each arg just needs to be entered into the environment.
     def checkArg(arg: Arg, env: Env): Result = {
         val t = arg.t
         val subrange = arg.subrange
@@ -57,6 +64,9 @@ object SafetyChecks {
     def checkStmt(stmt: Statement, env: Env): Result = stmt match {
 
         // this is horrible
+        // Must check that the interval of the result of the expr
+        // is contained by the interval and type of the function
+        // if the interval of the function is provided.
         case Return(expr) => lookup("returnType", env) match {
             case Right((_, t, rangeConstraint, _, _)) => rangeConstraint match {
                 case None => Right(env)
@@ -79,6 +89,8 @@ object SafetyChecks {
             }
         }
 
+        // Nothing to check here, just add to the env that "name" 
+        // has type t and has interval of expr
         case Decl(t, name, Some(expr)) => {
             checkExpr(expr, env) match {
                 case Right((_, _, range, subrange, value)) => {
@@ -89,13 +101,22 @@ object SafetyChecks {
             }
         }
 
+        // Shouldn't happen except for inside of forloop (checked
+        // during type checking). Add to env, but this will change
+        // during loop.
         case Decl(t, name, None) => {
-            Right(env)
+            val newVarInfo = (name, t, None, None, None) // to be changed in loops
+            Right(newVarInfo :: env)
         }
 
         // TODO: Do if and for
     }
 
+    // Just returning a nameless VarInfo tuple with interval, range, and subrange
+    // data. The interval should be (and is checked to be) contained within the
+    // range or subrange. For example, IntLit(100, 32, true, Some(Range(0, 100)))
+    // would pass checking since 100 is from [0,100].meet(int32interval). The function
+    // would then return ArgInfo = ("", IntType, Interval(-2^31, 2^31-1), None, [100, 100]).
     def checkExpr(expr: Expr, env: Env): Either[Errors, VarInfo] = expr match {
         case s : StrLit => strLitToInterval(s)
         case i : IntLit => intLitToInterval(i)

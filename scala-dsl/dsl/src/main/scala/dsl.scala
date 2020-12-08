@@ -64,7 +64,15 @@ object AST {
                    range: Option[Range],
                    name: String)
     case class Program(funcs: List[FuncDecl])
+} // End object AST
 
+import AST._
+
+object DslSyntax {
+    
+}
+
+object ExamplePrograms {
     val dimacs_scanner: Program =
         Program(List(
         FuncDecl(
@@ -91,4 +99,4 @@ object AST {
         Decl(IntType, "averagish", Some(Div(Var("acc"), IterLength(Var("numbers"))))),
         Return(Var("averagish"))
         ))))
-} // End object AST
+}
