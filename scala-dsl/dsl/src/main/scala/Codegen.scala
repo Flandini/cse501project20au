@@ -66,8 +66,8 @@ object CodeGen {
 
             case IntLit(num, width, signed, range) => num.toString
             case StrLit(value, range) => value
-            case IntIter(value, range) => "" // TODO: ?
-            case StrIter(value, range) => "" // TODO: ?
+            case IntIter(value, range, subrange) => "" // TODO: ?
+            case StrIter(value, range, subrange) => "" // TODO: ?
         }
     }
 }

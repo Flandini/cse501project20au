@@ -262,8 +262,8 @@ object TypeChecker {
                                else Left(s"Int lit ${IntLit(num, width, signed, range)} invalid")
                 } yield retType
             case StrLit(value, range) => rangeOk(range).flatMap(_ => Right(StringType))
-            case IntIter(value, range) => rangeOk(range).flatMap(_ => Right(IntIterType))
-            case StrIter(value, range) => rangeOk(range).flatMap(_ => Right(StrIterType))
+            case IntIter(value, range, subrange) => rangeOk(range).flatMap(_ => Right(IntIterType))
+            case StrIter(value, range, subrange) => rangeOk(range).flatMap(_ => Right(StrIterType))
         }
     }
 

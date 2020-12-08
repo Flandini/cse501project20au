@@ -30,6 +30,12 @@ object Interval extends Lattice[IntervalLatticeElement]  {
         case (Interval(a,b), Interval(c,d)) => Interval(a.max(c), b.min(d))
     }
 
+    def lte(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): Boolean = (lhs, rhs) match {
+        case (Bottom, _) => true
+        case (_, Bottom) => false
+        case (Interval(a,b), Interval(c,d)) => a <= c && b <= d
+    }
+
     // Pairwise interval widening
     def widen(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): IntervalLatticeElement = (lhs, rhs) match {
         case (Bottom, other) => other
