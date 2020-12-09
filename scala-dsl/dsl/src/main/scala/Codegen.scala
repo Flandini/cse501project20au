@@ -9,15 +9,39 @@ object CodeGen {
         |#include <stdlib.h>
         |#include <ctype.h>
         |#include <stdint.h>
-    """.stripMargin
+    """.stripMargin ++ ("\n" * 2)
 
     def genPreconditions: Code = """"""
 
-    def genStmt(stmt: Statement): Code = stmt match {
-        case Decl(t, name, expr) => ""
-        case For(iter1, iter2, acc, body) => ""
-        case If(cond, thn, els) => ""
-        case Return(expr) => s"return ${genExpr(expr)};"
+    def genStmt(stmt: Statement, indent: Int = 1): Code = {
+        val prependStr = " " * 4 * indent
+        val stmtStr = stmt match {
+            case Decl(t, name, expr) => expr match {
+                case None => s" ${genType(t)} ${name} "
+                case Some(e) =>  s"${genType(t)} ${name} = ${genExpr(e)};\n"
+            }
+            case For(iter1, iter2, acc, body) => ""
+            case If(cond, thn, els) => genIfStmt(If(cond, thn, els), indent)
+            case Return(expr) => s"return ${genExpr(expr)};\n"
+        }
+        prependStr ++ stmtStr
+    }
+
+    def genIfStmt(ifStmt: If, indent: Int = 1): Code = {
+        val prependStr = " " * 4 * indent
+        val check = s"if ( ${genExpr(ifStmt.cond)} ) {\n"
+        val thenBody = ifStmt.thn.map(genStmt(_, indent + 1)).mkString
+        val thenClose = "}"
+        val elsePart: Code = ifStmt.els match {
+            case None => ""
+            case Some(stmts) => {
+                val elsePart = s" else {\n"
+                val elseBody = stmts.map(genStmt(_, indent + 1)).mkString
+                val elseClose = s"}"
+                elsePart ++ elseBody ++ prependStr ++ elseClose
+            }
+        }
+        prependStr ++ check ++ thenBody ++ prependStr ++ thenClose ++ elsePart
     }
 
     def genType(t: Type): Code = t match {
@@ -25,13 +49,28 @@ object CodeGen {
         case IntType => "int" // TODO: ??
         case StrIterType => "char**"
         case IntIterType => "int*"
+        case IntDeclType(signed: Boolean, width: Int) => {
+            val sign = if (signed) "" else "u"
+            s"${sign}int${width}"
+        }
         case ProgramType => "" // Shouldn't propagate to here
         case ErrorType => "" // Shouldn't propagate to here
     }
 
-    def genFunc(f: FuncDecl): Code = {
-        ""
+    def genProg(p: Program): Code = genHeader ++ genFunc(p.funcs(0))
+
+    def genFunc(f: FuncDecl): Code = f match {
+        case FuncDecl(t, range, name, args, body) => {
+            val typeStr = genType(t)
+            val argslist = args.map(genArg).mkString(", ")
+            val prologue = s"${typeStr} ${name}(${argslist}) {"
+            val statementsStr = body.map(genStmt(_)).mkString
+            val epilogue = "}"
+            prologue ++ "\n" ++ statementsStr ++ epilogue ++ "\n\n"
+        }
     }
+
+    def genArg(a: Arg): Code = genType(a.t) ++ " " ++ a.name
 
     def genExpr(expr: Expr): Code = {
         expr match {
@@ -55,27 +94,31 @@ object CodeGen {
             case StrEquals(l, r) => "" // TODO: Custom gen method
             case StrConcat(l, r) => "" // TODO: Custom gen method
             case StrAppend(l, r) => "" // TODO: Custom gen method
-            case StrLength(l) => "" // TODO: Custom gen method
+            case StrLength(l) => s"strlen(${genExpr(l)})" // TODO: Custom gen method
 
+            // need range/constraint info from typechecking/safetychecks
             case IterConcat(l,r) => "" // TODO: Custom gen method
-            case IterFirst(l) => "" // TODO: Custom gen method
+            case IterFirst(l) => s"${genExpr(l)}[0]" // TODO: Custom gen method
             case IterLength(l) => "" // TODO: Custom gen method
 
-            case FunCall(name, params) => name + "(" + params.map(genExpr).mkString(", ") + ")"
+            case FunCall(name, params) => name + "(" + params.map(genExpr).mkString(",") + ")"
             case Var(name) => name
 
             case IntLit(num, width, signed, range) => num.toString
             case StrLit(value, range) => value
-            case IntIter(value, range, subrange) => "" // TODO: ?
-            case StrIter(value, range, subrange) => "" // TODO: ?
+            case IntIter(value, range, subrange) => "" // should never be propagated in code generation
+            case StrIter(value, range, subrange) => "" // should never be propagated in code generation
         }
     }
 }
 
 object CodegenTest {
     import CodeGen._
+    import ExamplePrograms._
 
     def main(args: Array[String]): Unit = {
-        println("")
+        println(genProg(one_decl_one_return))
+        println("*" * 40)
+        println(genProg(array_average))
     }
 }
