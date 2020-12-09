@@ -1,8 +1,21 @@
 
 import AST._
+import SafetyChecks._
+import Interval._
 
 object CodeGen {
     type Code = String
+    type Range = (Option[IntervalLatticeElement], Option[IntervalLatticeElement])
+
+    var constraintData: SafetyChecks.Env = List[VarInfo]()
+
+    def lookup(v: VarName, env: Env): Range = env match {
+        case Nil => (None, None)
+        case (varname, t, latticeE, olatticeE, value) :: xs => if (v == varname) 
+                                                                    (latticeE, olatticeE)
+                                                                else
+                                                                    lookup(v, xs)
+    }
 
     def genHeader: Code = """
         |#include <string.h>
@@ -20,11 +33,17 @@ object CodeGen {
                 case None => s" ${genType(t)} ${name} "
                 case Some(e) =>  s"${genType(t)} ${name} = ${genExpr(e)};\n"
             }
-            case For(iter1, iter2, acc, body) => ""
+            case For(iter1, iter2, acc, body) => genForStmt(For(iter1, iter2, acc, body), indent)
             case If(cond, thn, els) => genIfStmt(If(cond, thn, els), indent)
             case Return(expr) => s"return ${genExpr(expr)};\n"
         }
         prependStr ++ stmtStr
+    }
+
+    def forIterNeedsExtract(iter: Iterator): Boolean = exprIsVarName(iter.iterator)
+    def genForStmt(f: For, indent: Int = 1): Code = {
+        //val decl
+        ""
     }
 
     def genIfStmt(ifStmt: If, indent: Int = 1): Code = {
@@ -57,7 +76,16 @@ object CodeGen {
         case ErrorType => "" // Shouldn't propagate to here
     }
 
-    def genProg(p: Program): Code = genHeader ++ genFunc(p.funcs(0))
+    def genProg(p: Program): Code = {
+        val rangeData = SafetyChecks.check(p)
+        rangeData match {
+            case Left(err) => {} // Should work by here or safety and type checks would've failed
+            case Right(constraintTable) => constraintData = constraintTable
+        }
+        val header = genHeader
+        val funcs = genFunc(p.funcs(0))
+        header ++ funcs
+    }
 
     def genFunc(f: FuncDecl): Code = f match {
         case FuncDecl(t, range, name, args, body) => {
@@ -100,6 +128,7 @@ object CodeGen {
             case IterConcat(l,r) => "" // TODO: Custom gen method
             case IterFirst(l) => s"${genExpr(l)}[0]" // TODO: Custom gen method
             case IterLength(l) => "" // TODO: Custom gen method
+            }
 
             case FunCall(name, params) => name + "(" + params.map(genExpr).mkString(",") + ")"
             case Var(name) => name
@@ -110,6 +139,11 @@ object CodeGen {
             case StrIter(value, range, subrange) => "" // should never be propagated in code generation
         }
     }
+
+    def exprIsVarName(expr: Expr): Boolean = expr match {
+        case Var(name) => true 
+        case _ => false
+    }
 }
 
 object CodegenTest {
@@ -118,7 +152,7 @@ object CodegenTest {
 
     def main(args: Array[String]): Unit = {
         println(genProg(one_decl_one_return))
-        println("*" * 40)
-        println(genProg(array_average))
+        //println("*" * 40)
+        //println(genProg(array_average))
     }
 }
