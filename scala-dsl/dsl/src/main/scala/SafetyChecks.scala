@@ -15,7 +15,7 @@ import java.lang.Thread.State
 object SafetyChecks {
     type Errors = String
     type VarName = String
-    type Result = Either[String, Env]
+    type Result = Either[Errors, Env]
     type SubrangeConstraint = Option[IntervalLatticeElement]
     type RangeConstraint = Option[IntervalLatticeElement]
     type CurrentValue = Option[IntervalLatticeElement]
@@ -39,9 +39,7 @@ object SafetyChecks {
     // checker is already handling this.
     def check(p: Program): Result = {
         types = TypeChecker.getTypes(p)
-        val res = checkFunc(p.funcs(0), List())
-        println(res)
-        res
+        checkFunc(p.funcs(0), List())
     }
 
     def checkArgs(args: List[Arg], env: Env): Result = args match {
@@ -197,8 +195,6 @@ object SafetyChecks {
             newEnv <- checkStmt(f.acc, origEnv)
         } yield newEnv
 
-        println(s"In for stmt check, env is : ${envWithAcc}")
-
         val resEnv = for {
             origEnv <- envWithAcc
             res <- checkForBody(f.body, f.acc.name, maxIterationsOfExpr(iter, origEnv), origEnv)
@@ -314,16 +310,15 @@ object SafetyChecks {
                         else
                             Right(exprRes)
             } yield res
+
         case Eq(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case Lte(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case Lt(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case Gte(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case Gt(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case Neq(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
-
         case Or(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case And(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
-
         case Not(left) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
 
         case Ntos(left) => checkExpr(left, env) match {
@@ -501,9 +496,17 @@ object SafetyChecks {
         else
             stringLengthToHighDigit(len, tmp ++ "9")
 
+    def printEnv(env: Result): Unit = env match {
+        case Left(err) => println(s"Compilation failed:\n\n${err}\n\n")
+        case Right(state) =>
+            println(state.map(showVarInfo(_)).mkString("\n"))
+    }
+
+    def showVarInfo(v: VarInfo): String = {
+        val (name, typ, range, subrange, value) = v
+        s"${name} :: Type(${typ}), Range(${range}), Subrange(${subrange}), Value(${value})"
+    }
 }
-
-
 
 object SafetyChecksTest {
     import SafetyChecks._ 
@@ -512,6 +515,6 @@ object SafetyChecksTest {
 
     def main(args: Array[String]): Unit = {
         val res = check(array_average)
-        println(res)
+        printEnv(res)
     }
 }

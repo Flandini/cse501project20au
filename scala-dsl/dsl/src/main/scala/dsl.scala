@@ -98,7 +98,7 @@ object ExamplePrograms {
     val array_average =
         Program(List(
         FuncDecl(
-        IntType, Some(Range(0, 255)), "array_average", List(Arg(IntIterType, Some(Range(0, 255)), Some(Range(0, 50000)), "numbers")), List(
+        IntType, Some(Range(0, 255)), "array_average", List(Arg(IntIterType, Some(Range(0, 255)), Some(Range(1, 50000)), "numbers")), List(
         For(Iterator("n", Var("numbers")), None, Decl(IntDeclType(unsigned, 32), "acc", Some(IntLit(0, 32, signed, None))), List(
             Add(Var("acc"), Var("n"))
         )),
