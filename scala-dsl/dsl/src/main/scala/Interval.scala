@@ -24,8 +24,10 @@ object Interval extends Lattice[IntervalLatticeElement]  {
             //if signed then (2 ^ 31) - 1 else (2 ^ 32) - 1
             if (signed) BigInt(2).pow(width - 1) - BigInt(1) else BigInt(2).pow(width) - BigInt(1)
         )
-    def defaultLengthInterval: IntervalLatticeElement =
-        Interval.fromSignAndWidth(false, 64)
+    def defaultLengthInterval: IntervalLatticeElement = Interval.fromSignAndWidth(false, 64)
+    // Per C standard rules, constants on RHS try through: int, long, long long. Only start with int here
+    def defaultIntInterval: IntervalLatticeElement = Interval.fromSignAndWidth(true, 32)
+    def badInterval = Interval.fromInts(-1, 0)
 
     def min(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.min(b).min(c).min(d)
     def max(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.max(b).max(c).max(d)
@@ -58,7 +60,7 @@ object Interval extends Lattice[IntervalLatticeElement]  {
         case (Interval(a,b), Interval(c,d)) => Interval(a.max(c), b.min(d))
     }
 
-    def meet(lhs: Option[IntervalLatticeElement], rhs: Option[IntervalLatticeElement]): Option[IntervalLatticeElement] = 
+    def opt_meet(lhs: Option[IntervalLatticeElement], rhs: Option[IntervalLatticeElement]): Option[IntervalLatticeElement] = 
         lhs match {
             case None => rhs
             case Some(l) => rhs match {
@@ -80,6 +82,7 @@ object Interval extends Lattice[IntervalLatticeElement]  {
     }
 
     // lhs from rhs
+    // inclusive check
     def containedIn(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): Boolean = (lhs, rhs) match {
         case (Bottom, _) => false
         case (_, Bottom) => false

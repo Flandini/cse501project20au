@@ -51,14 +51,7 @@ object SafetyChecks {
 
     def checkStmts(stmts: List[Statement], env: Env): Result = stmts match {
         case Nil => Right(env)
-        case x :: xs => {
-            val parent: Option[Statement] = x match {
-                case For(iter1, iter2, acc, body) => Some(x)
-                case If(cond, thn, els) => Some(x)
-                case _ => None
-            }
-            checkStmt(x, env, parent).flatMap(checkStmts(xs, _))
-        }
+        case x :: xs => checkStmt(x, env).flatMap(checkStmts(xs, _))
     }
 
     // 1) Add returnType (TODO: fix this to not use hardcoded "returnType") constraint
@@ -87,8 +80,7 @@ object SafetyChecks {
         )
     }
 
-    // Parent is used when in loop or conditional to compute join
-    def checkStmt(stmt: Statement, env: Env, parent: Option[Statement]): Result = stmt match {
+    def checkStmt(stmt: Statement, env: Env): Result = stmt match {
 
         // this is horrible
         // Must check that the interval of the result of the expr
@@ -135,17 +127,15 @@ object SafetyChecks {
         
         case Decl(t, name, Some(expr)) => {
             // if Int type, will need to check that the RHS range falls within the Int type bounds
-            println(t)
             val optRange: Option[IntervalLatticeElement] = t match {
                 case IntDeclType(signed, width) => Some(Interval.fromSignAndWidth(signed,width))
+                case IntType => Some(Interval.defaultIntInterval)
                 case _ => None
             }
 
             checkExpr(expr, env) match {
                 // If interval analysis passes on RHS
                 case Right((_, _, range, subrange, value)) => {
-                    println(s"RHS range: ${range}, RHS value: ${value}")
-                    println(s"Opt range: ${optRange}")
                     // Check that the value fits in the range on the RHS
                     (value, range) match {
                         case (Some(interval_a), Some(interval_b)) => {
@@ -155,11 +145,13 @@ object SafetyChecks {
                         case _ => {}
                     }
 
+                    val rhsRange = opt_meet(value, range)
+
                     // Check that the RHS range falls in the int type bounds
-                    (optRange, range) match {
+                    (optRange, rhsRange) match {
                         case (Some(l_interval), Some(r_interval)) => {
                             if (!Interval.containedIn(r_interval, l_interval)) {
-                                println(s"${l_interval} <=? ${r_interval}")
+                                println(s"${r_interval} <=? ${l_interval}")
                                 return Left(s"Range of expr ${expr} not within range of ${Decl(t,name,Some(expr))}")
                             }
                         }
@@ -167,7 +159,7 @@ object SafetyChecks {
                     }
 
                     // Set the range for this var to the smallest range bound
-                    val newVarInfo = (name, t, meet(range, optRange), subrange, value)
+                    val newVarInfo = (name, t, opt_meet(rhsRange, optRange), subrange, value)
                     Right(newVarInfo :: env)
                 }
 
@@ -190,6 +182,7 @@ object SafetyChecks {
         // for does all checks linearly, merge with original env, rerun for with check again
     }
 
+    // For deadline, just check for loops over one iter, not two
     def checkFor(f: For, env: Env): Result = {
         val idxName = f.iter1.idx
         val idxType = types.getTypeForName(idxName)
@@ -202,11 +195,57 @@ object SafetyChecks {
 
         val envWithAcc = for {
             origEnv <- envWithIdx
-            newEnv <- checkStmt(f.acc, origEnv, Some(f))
+            newEnv <- checkStmt(f.acc, origEnv)
         } yield newEnv
+
+        println(s"In for stmt check, env is : ${env}")
+        val maxIterations = exprInterval(iter, env) match {
+            case Interval(BigInt(-1), BigInt(0)) => BigInt(2).pow(64) - BigInt(1)
+            case Interval(lo, hi) => hi
+            case Bottom => BigInt(2).pow(64) - BigInt(1)
+        }
+        println(s"Max num iterations: ${maxIterations}")
+        //val envAfterLoop = checkForBody(f.body, f.acc.name, )
 
         println(envWithAcc)
         envWithAcc
+    }
+    def checkForBody(body: List[ForBody], accName: String, iterationsLeft: BigInt, env: Env): Result = {
+        if (iterationsLeft == BigInt(0))
+            Right(env)
+        else
+            for {
+                updatedEnv <- updateEnvWithForBody(body, accName, env)
+                resultEnv <- checkForBody(body, accName, iterationsLeft - BigInt(1), updatedEnv)
+            } yield resultEnv
+    }
+    def updateEnvWithForBody(body: List[ForBody], accName: String, env: Env): Result = body match {
+        case Nil => Right(env)
+        case x :: xs => x match {
+            case expr: Expr => 
+                for {
+                    envWithUpdatedAcc <- updateAcc(accName, checkExpr(expr, env), env)
+                    resultEnv <- updateEnvWithForBody(xs, accName, envWithUpdatedAcc)
+                } yield resultEnv
+            case s : Statement =>
+                for {
+                    updatedEnv <- checkStmt(s, env)
+                    resultEnv <- updateEnvWithForBody(xs, accName, updatedEnv)
+                } yield resultEnv
+        }
+    }
+    def updateAcc(accName: String, newInfo: Either[String, VarInfo], env: Env): Result = {
+        newInfo match {
+            case Left(err) => Left(err)
+            case Right(info) => {
+                val envWithNoAcc = env.filter(x => x._1 != accName)
+                if (info._1 != accName) // Should never happen from type checking
+                    Left(s"Couldn't find loop accumulator with name ${accName} in env ${env}")
+                else
+                    Right(info :: env)
+            }
+        }
+        
     }
 
     // Just returning a nameless VarInfo tuple with interval, range, and subrange
@@ -332,6 +371,14 @@ object SafetyChecks {
 
         case _ => Left(s"Checking of ${expr} not yet supported")
     }
+    def exprInterval(expr: Expr, env: Env): IntervalLatticeElement =
+        checkExpr(expr, env) match {
+            case Left(err) => Interval.badInterval // Hack to get around Either in some funcs 
+            case Right((_, t, range, subrange, value)) => range match {
+                case None => Interval.badInterval
+                case Some(intrvl) => intrvl
+            }
+        }
 
     def castSafe(fromSigned: Boolean, fromWidth: Int, fromRange: Option[IntervalLatticeElement], toSigned: Boolean, toWidth: Int): Boolean = {
         if (fromSigned && !toSigned) {
