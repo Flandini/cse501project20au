@@ -22,10 +22,13 @@ object Interval extends Lattice[IntervalLatticeElement]  {
             if (signed) BigInt(-(Math.pow(2, (width - 1)).toInt)) else BigInt(0),
             if (signed) BigInt(Math.pow(2, width-1).toInt - 1) else BigInt(Math.pow(2, width).toInt - 1)
         )
+    def defaultLengthInterval: IntervalLatticeElement =
+        Interval.fromSignAndWidth(false, 64)
+
     def min(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.min(b).min(c).min(d)
     def max(a: BigInt, b: BigInt, c: BigInt, d: BigInt): BigInt = a.max(b).max(c).max(d)
 
-    def intervalTop: IntervalLatticeElement = Interval.fromBigInts(least, most)
+    def intervalTop: IntervalLatticeElement = Interval.fromBigInts(least, most) 
 
     def containsNegatives(i: IntervalLatticeElement): Boolean = i match {
         case Bottom => false

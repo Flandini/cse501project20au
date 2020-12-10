@@ -1,6 +1,8 @@
 
 import Interval._
 import AST._
+import SymbolTable._
+import PropertyStore._
 
 import scala.math.BigInt
 import scala.annotation.tailrec
@@ -20,6 +22,8 @@ object SafetyChecks {
     type VarInfo = (VarName, AST.Type, RangeConstraint, SubrangeConstraint, CurrentValue)
     type Env = List[VarInfo]
 
+    var types: SymbolTable = new SymbolTable()
+
     def rangeToInterval(r: Option[Range]): Option[IntervalLatticeElement] = 
         r.flatMap(x => Some(Interval.fromInts(x.low, x.high)))
 
@@ -33,11 +37,16 @@ object SafetyChecks {
 
     // TODO: Fix this for hard goal of handling > 1 function. Type
     // checker is already handling this.
-    def check(p: Program): Result = checkFunc(p.funcs(0), List())
+    def check(p: Program): Result = {
+        types = TypeChecker.getTypes(p)
+        val res = checkFunc(p.funcs(0), List())
+        println(res)
+        res
+    }
 
     def checkArgs(args: List[Arg], env: Env): Result = args match {
         case Nil => Right(env)
-        case x :: xs => checkArg(x, env).flatMap(res => checkArgs(xs, res ++ env))
+        case x :: xs => checkArg(x, env).flatMap(checkArgs(xs, _))
     }
 
     def checkStmts(stmts: List[Statement], env: Env): Result = stmts match {
@@ -48,7 +57,7 @@ object SafetyChecks {
                 case If(cond, thn, els) => Some(x)
                 case _ => None
             }
-            checkStmt(x, env, parent).flatMap(res => checkStmts(xs, res ++ env))
+            checkStmt(x, env, parent).flatMap(checkStmts(xs, _))
         }
     }
 
@@ -170,7 +179,24 @@ object SafetyChecks {
             Right(newVarInfo :: env)
         }
 
-        // TODO: Do if and for
+        case For(iter1, iter2, acc, body) => checkFor(For(iter1, iter2, acc, body), env)
+
+        // TODO: Do if
+        case _ => Right(env)
+        // for does all checks linearly, merge with original env, rerun for with check again
+    }
+
+    def checkFor(f: For, env: Env): Result = {
+        val idxName = f.iter1.idx
+        val idxType = types.getTypeForName(idxName)
+        val iter = f.iter1.iterator
+
+        val idxInfo = for {
+            iteratorInfo <- checkExpr(iter, env)
+            idxInfo <- Right((idxName, idxType, iteratorInfo._4, None, iteratorInfo._4))
+        } yield (idxName, idxType, iteratorInfo._4, None, iteratorInfo._4) :: env
+        println(idxInfo)
+        idxInfo
     }
 
     // Just returning a nameless VarInfo tuple with interval, range, and subrange
@@ -228,7 +254,7 @@ object SafetyChecks {
         case Lt(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case Gte(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case Gt(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
-        case Eq(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
+        case Neq(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
 
         case Or(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
         case And(left, right) => Right(("", IntType, Some(Interval.fromInts(0, 1)), None, Some(Interval.fromInts(0, 1))))
@@ -248,6 +274,7 @@ object SafetyChecks {
 
                 val stringRange = value match {
                     case Some(Interval(lo, hi)) => Some(Interval.fromBigInts(0, digitsInBigInt(lo).max(digitsInBigInt(hi))))
+                    case _ => None
                 }
 
                 Right(("", StringType, stringRange, None, None))
@@ -260,6 +287,7 @@ object SafetyChecks {
 
                 val stringRange = value match {
                     case Some(Interval(lo, hi)) => Some(Interval.fromBigInts(0, digitsInBigInt(lo).max(digitsInBigInt(hi))))
+                    case _ => None
                 }
 
                 val intRange = range match {
@@ -275,7 +303,24 @@ object SafetyChecks {
             case Left(err) => Left(err)
         }
 
+        case IterLength(left) => checkExpr(left, env) match {
+            case Right((_, t, range, subrange, value)) => range match {
+                case None => Right(("", IntType, Some(Interval.defaultLengthInterval), subrange, value))
+                case Some(r) => Right(("", t, range, subrange, value))
+            }
+            case Left(err) => Left(err)
+        }
+
+        // Could be more precise
+        case StrSplit(left, right) =>
+            for {
+                targetStrInfo <- checkExpr(left, env)
+                iteratorInfo <- Right(("", StrIterType, targetStrInfo._3, targetStrInfo._3, None))
+            } yield iteratorInfo
+
         case Var(name) => lookup(name, env).flatMap(varinfo => Right(varinfo))
+
+        case _ => Left(s"Checking of ${expr} not yet supported")
     }
 
     def intIterToInterval(iit: IntIter): Either[Errors, VarInfo] =
@@ -361,7 +406,7 @@ object SafetyChecksTest {
     import ExamplePrograms._
 
     def main(args: Array[String]): Unit = {
-        val res = check(one_decl_one_return)
+        val res = check(array_average)
         println(res)
     }
 }

@@ -30,6 +30,10 @@ object TypeChecker {
             secondPassCheck <- shortCircuitListCheck(prog.funcs, checkFuncBody)
         } yield secondPassCheck
 
+    def getTypes(prog: Program): SymbolTable = {
+        check(prog)
+        table
+    }
 
     @tailrec
     def shortCircuitListCheck[A](lst: List[A], f: A => Result): Result = lst match {
@@ -253,6 +257,7 @@ object TypeChecker {
             }
 
             case Var(name) => if (table.nameDefined(name)) Right(table.getTypeForName(name))
+                              else if (name.length == 0) Left("Empty var names not allowed")
                               else Left(s"Var ${name} not defined before use")
             case IntLit(num, width, signed, range) => 
                 for {

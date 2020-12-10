@@ -1,5 +1,7 @@
 
+
 object AST {
+    // 48
     abstract class Type extends Property
     case object StringType extends Type
     case object IntType extends Type 
@@ -97,10 +99,10 @@ object ExamplePrograms {
         Program(List(
         FuncDecl(
         IntType, Some(Range(0, 255)), "array_average", List(Arg(IntIterType, Some(Range(0, 255)), Some(Range(0, 50000)), "numbers")), List(
-        For(Iterator("n", Var("numbers")), None, Decl(IntType, "acc", Some(IntLit(0, 32, signed, None))), List(
+        For(Iterator("n", Var("numbers")), None, Decl(IntDeclType(unsigned, 32), "acc", Some(IntLit(0, 32, signed, None))), List(
             Add(Var("acc"), Var("n"))
         )),
-        Decl(IntType, "averagish", Some(Div(Var("acc"), IterLength(Var("numbers"))))),
+        Decl(IntDeclType(unsigned, 8), "averagish", Some(Div(Var("acc"), IterLength(Var("numbers"))))),
         Return(Var("averagish"))
         ))))
 
