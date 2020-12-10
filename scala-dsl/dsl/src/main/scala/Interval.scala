@@ -36,7 +36,11 @@ object Interval extends Lattice[IntervalLatticeElement]  {
 
     def containsNegatives(i: IntervalLatticeElement): Boolean = i match {
         case Bottom => false
-        case Interval(lo, hi) => lo <= 0 || hi <= 0
+        case Interval(lo, hi) => lo <= BigInt(0) || hi <= BigInt(0)
+    }
+    def containsZero(i: IntervalLatticeElement): Boolean = i match {
+        case Bottom => false
+        case Interval(lo, hi) => lo <= BigInt(0) && hi >= BigInt(0)
     }
 
     def join(lhs: IntervalLatticeElement, rhs: IntervalLatticeElement): IntervalLatticeElement = (lhs, rhs) match {

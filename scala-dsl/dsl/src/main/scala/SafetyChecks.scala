@@ -159,7 +159,7 @@ object SafetyChecks {
                     }
 
                     // Set the range for this var to the smallest range bound
-                    val newVarInfo = (name, t, opt_meet(rhsRange, optRange), subrange, value)
+                    val newVarInfo = (name, t, optRange, subrange, rhsRange)
                     Right(newVarInfo :: env)
                 }
 
@@ -179,7 +179,6 @@ object SafetyChecks {
 
         // TODO: Do if
         case _ => Right(env)
-        // for does all checks linearly, merge with original env, rerun for with check again
     }
 
     // For deadline, just check for loops over one iter, not two
@@ -198,54 +197,66 @@ object SafetyChecks {
             newEnv <- checkStmt(f.acc, origEnv)
         } yield newEnv
 
-        println(s"In for stmt check, env is : ${env}")
-        val maxIterations = exprInterval(iter, env) match {
-            case Interval(BigInt(-1), BigInt(0)) => BigInt(2).pow(64) - BigInt(1)
-            case Interval(lo, hi) => hi
-            case Bottom => BigInt(2).pow(64) - BigInt(1)
-        }
-        println(s"Max num iterations: ${maxIterations}")
-        //val envAfterLoop = checkForBody(f.body, f.acc.name, )
+        println(s"In for stmt check, env is : ${envWithAcc}")
 
-        println(envWithAcc)
-        envWithAcc
+        val resEnv = for {
+            origEnv <- envWithAcc
+            res <- checkForBody(f.body, f.acc.name, maxIterationsOfExpr(iter, origEnv), origEnv)
+        } yield res
+        resEnv
     }
+    @tailrec
     def checkForBody(body: List[ForBody], accName: String, iterationsLeft: BigInt, env: Env): Result = {
         if (iterationsLeft == BigInt(0))
             Right(env)
-        else
-            for {
-                updatedEnv <- updateEnvWithForBody(body, accName, env)
-                resultEnv <- checkForBody(body, accName, iterationsLeft - BigInt(1), updatedEnv)
-            } yield resultEnv
+        else {
+            val updatedEnv = updateEnvWithForBody(body, accName, env)
+            updatedEnv match {
+                case Left(err) => Left(err)
+                case Right(uEnv) => {
+                    val counter = iterationsLeft - BigInt(1)
+                    checkForBody(body, accName, counter, uEnv)
+                }
+            }
+            // for {
+            //     updatedEnv <- updateEnvWithForBody(body, accName, env)
+            //     resultEnv <- checkForBody(body, accName, iterationsLeft - BigInt(1), updatedEnv)
+            // } yield resultEnv
+        }
     }
-    def updateEnvWithForBody(body: List[ForBody], accName: String, env: Env): Result = body match {
-        case Nil => Right(env)
-        case x :: xs => x match {
-            case expr: Expr => 
-                for {
-                    envWithUpdatedAcc <- updateAcc(accName, checkExpr(expr, env), env)
-                    resultEnv <- updateEnvWithForBody(xs, accName, envWithUpdatedAcc)
-                } yield resultEnv
-            case s : Statement =>
-                for {
-                    updatedEnv <- checkStmt(s, env)
-                    resultEnv <- updateEnvWithForBody(xs, accName, updatedEnv)
-                } yield resultEnv
+    def updateEnvWithForBody(body: List[ForBody], accName: String, env: Env): Result = {
+        body match {
+            case Nil => Right(env)
+            case x :: xs => x match {
+                case expr: Expr => 
+                    for {
+                        envWithUpdatedAcc <- updateAcc(accName, checkExpr(expr, env), env)
+                        resultEnv <- updateEnvWithForBody(xs, accName, envWithUpdatedAcc)
+                    } yield resultEnv
+                case s : Statement =>
+                    for {
+                        updatedEnv <- checkStmt(s, env)
+                        resultEnv <- updateEnvWithForBody(xs, accName, updatedEnv)
+                    } yield resultEnv
+            }
         }
     }
     def updateAcc(accName: String, newInfo: Either[String, VarInfo], env: Env): Result = {
         newInfo match {
             case Left(err) => Left(err)
-            case Right(info) => {
+            case Right((_, t, range, subrange, value)) => {
                 val envWithNoAcc = env.filter(x => x._1 != accName)
-                if (info._1 != accName) // Should never happen from type checking
-                    Left(s"Couldn't find loop accumulator with name ${accName} in env ${env}")
-                else
-                    Right(info :: env)
+                val newAccInfo = (accName, t, range, subrange, value)
+                Right(newAccInfo :: envWithNoAcc)
             }
         }
-        
+    }
+    def maxIterationsOfExpr(expr: Expr, env: Env) = exprInterval(expr, env) match {
+        case Interval(lo, hi) => if (lo == BigInt(-1) && hi == BigInt(0))
+                                        BigInt(2).pow(64) - BigInt(1)
+                                    else
+                                        hi
+        case Bottom => BigInt(2).pow(64) - BigInt(1)
     }
 
     // Just returning a nameless VarInfo tuple with interval, range, and subrange
@@ -258,6 +269,7 @@ object SafetyChecks {
         case i : IntLit => intLitToInterval(i)
         case iit : IntIter => intIterToInterval(iit)
         case sit : StrIter => strIterToInterval(sit)
+
         case Add(left, right) => 
             for {
                 lhs <- checkExpr(left, env)
@@ -292,6 +304,10 @@ object SafetyChecks {
             for {
                 lhs <- checkExpr(left, env)
                 rhs <- checkExpr(right,env)
+                _ <- if (exprCouldBeZero(rhs))
+                        Left(s"Div by zero possible at '${left} / ${right}'")
+                     else
+                        Right(rhs)
                 exprRes <- Right(("", IntType, Interval.opt_join(lhs._3, rhs._3), Interval.opt_join(lhs._4, rhs._4), Interval.binop(Interval.div, lhs._5, rhs._5)))
                 res <- if (!Interval.containedIn(exprRes._5, exprRes._3))
                             Left(s"${expr} doesn't fit in expected range: ${exprRes._3}")
@@ -404,6 +420,12 @@ object SafetyChecks {
             defaultCheck || rangeCheck
         }
         false
+    }
+
+    def exprCouldBeZero(info: VarInfo): Boolean = info match {
+        case (_, _, _, _, Some(intrvl)) => containsZero(intrvl)
+        case (_, _, Some(intrvl), _, _) => containsZero(intrvl)
+        case _ => false
     }
 
     def intIterToInterval(iit: IntIter): Either[Errors, VarInfo] =
