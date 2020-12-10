@@ -80,46 +80,22 @@ object SafetyChecks {
 
     def checkStmt(stmt: Statement, env: Env): Result = stmt match {
 
-        // this is horrible
         // Must check that the interval of the result of the expr
-        // is contained by the interval and type of the function
-        // if the interval of the function is provided.
-        case Return(expr) => lookup("returnType", env) match {
-
-            case Right((_, t, rangeConstraint, subRangeConstraint, _)) => rangeConstraint match {
-
-                case None => Right(env)
-                case Some(interval) => {
-
-                    checkExpr(expr, env) match {
-
-                        case Right((_, t, range, subrange, value)) => {
-
-                            // Check if the value on the RHS fits in the range of the RHS
-                            (value, range) match {
-                                case (Some(a), Some(b)) => {
-                                    if (!Interval.containedIn(a, b))
-                                        return Left(s"Value of ${expr} doesn't fit in needed range: ${range}")
-                                }
-                                case _ => {}
-                            }
-
-                            // Check that the RHS values fit in range constraint of functino return constraints
-                            (range, rangeConstraint) match {
-                                case (Some(a), Some(b)) => {
-                                    if (!Interval.containedIn(a, b))
-                                        return Left(s"Value of ${expr} doesn't fit in needed range: ${rangeConstraint}")
-                                }
-                                case _ => {}
-                            }
-
+        // is contained by the interval and is castable to the return type
+        case Return(expr) => {
+            checkExpr(expr, env) match {
+                case Left(err) => Left(err)
+                case Right((_, rhsType, rhsRange, rhsSubrange, rhsValue)) => lookup("returnType", env) match {
+                    // Two things, rhs must be castable to returnType and satisfy user provided constraints
+                    case Right((_, lhsType, lhsRange, _, _)) => 
+                        if (!castSafe(rhsType, lhsRange, lhsType))
+                            Left(s"expression in 'return ${expr}' is not castable to ${lhsType}")
+                        else if (!containedIn(rhsValue, lhsRange) && !containedIn(rhsRange, lhsRange))
+                            Left(s"expression in 'return ${expr} has value ${rhsValue} and range ${rhsRange} which does not fit in expected ${lhsRange}'")
+                        else
                             Right(env)
-                        }
-                        case Left(err) => Left(err)
-                    }
                 }
             }
-            case Left(err) => Left(err)
         }
 
         
@@ -391,6 +367,16 @@ object SafetyChecks {
             }
         }
 
+    def castSafe(fromType: Type, fromRange: Option[IntervalLatticeElement], toType: Type): Boolean = (fromType, toType) match {
+        case (IntType, IntType) => true
+        case (IntType, IntDeclType(signed, width)) =>
+            castSafe(true, 32, fromRange, signed, width)
+        case (IntDeclType(signed, width), IntType) => 
+            castSafe(signed, width, fromRange, true, 32)
+        case (IntDeclType(fromSigned, fromWidth), IntDeclType(toSigned, toWidth)) => 
+            castSafe(fromSigned, fromWidth, fromRange, toSigned, toWidth)
+        case _ => false
+    }
     def castSafe(fromSigned: Boolean, fromWidth: Int, fromRange: Option[IntervalLatticeElement], toSigned: Boolean, toWidth: Int): Boolean = {
         if (fromSigned && !toSigned) {
             fromRange match {
@@ -414,7 +400,6 @@ object SafetyChecks {
             }
             defaultCheck || rangeCheck
         }
-        false
     }
 
     def exprCouldBeZero(info: VarInfo): Boolean = info match {
@@ -514,7 +499,11 @@ object SafetyChecksTest {
     import ExamplePrograms._
 
     def main(args: Array[String]): Unit = {
-        val res = check(array_average)
+        // val res = check(array_average)
+        // printEnv(res)
+        // val res = check(one_decl_one_return)
+        // printEnv(res)
+        val res = check(dimacs_scanner)
         printEnv(res)
     }
 }
