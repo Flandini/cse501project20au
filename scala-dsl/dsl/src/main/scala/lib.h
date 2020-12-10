@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+static inline
 char** str_split(char* in, char* delim)
 {
     char** tokens = (char**) calloc(strlen(in) + 2, sizeof(char*));
@@ -13,6 +14,7 @@ char** str_split(char* in, char* delim)
     return tokens;
 }
 
+static inline
 size_t int_iter_length(int* iter)
 {
     if (!(*iter)) return 0;
@@ -21,6 +23,7 @@ size_t int_iter_length(int* iter)
     return length;
 }
 
+static inline
 size_t char_iter_length(char** iter)
 {
     if (!(*iter)) return 0;
@@ -29,6 +32,7 @@ size_t char_iter_length(char** iter)
     return length;
 }
 
+// Stuck here for fuzzing
 int32_t* scan_line(char* clause_line) {
     char* lit;
     char* delim0 = " ";

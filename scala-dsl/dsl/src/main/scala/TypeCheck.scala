@@ -85,10 +85,14 @@ object TypeChecker {
                         val currentFunc = funcStack.top
                         val expectedReturnType = table.getPropertyForName(currentFunc, "type")
 
-                        if (!expectedReturnType.contains(t))
-                            Left(s"Return type of ${expr} doesnt match expected ${expectedReturnType}")
-                        else
-                            Right(t)
+                        expectedReturnType match {
+                            case None => Left(s"Couldn't infer return type for function: ${funcStack.top}")
+                            case Some(retType) => if (retType !~ t)
+                                                    Left(s"Return type of ${expr} doesnt match expected ${retType}")
+                                                  else
+                                                    Right(t)
+
+                        }
                     }
                 }
 
@@ -275,10 +279,10 @@ object TypeChecker {
     def checkNumericBinOp(e: Expr, l: Expr, r: Expr): Result = 
         for {
             ltype <- checkExpr(l) 
-            _ <- if (ltype != IntType) Left(s"Expected expression of type of int at ${l}")
+            _ <- if (ltype !~ IntType) Left(s"Expected expression of type of int at ${l}")
                  else Right(IntType)
             rtype <- checkExpr(r)
-            _ <- if (rtype != IntType) Left(s"Expected expression of type of int at ${r}")
+            _ <- if (rtype !~ IntType) Left(s"Expected expression of type of int at ${r}")
                  else Right(IntType)
         } yield IntType
 
@@ -290,10 +294,10 @@ object TypeChecker {
         }
         for {
             ltype <- checkExpr(l)
-            _ <- if (ltype != StringType) Left(s"Expected expression of type of string at ${l}")
+            _ <- if (ltype !~ StringType) Left(s"Expected expression of type of string at ${l}")
                  else Right(StringType)
             rtype <- checkExpr(r)
-            _ <- if (rtype != StringType) Left(s"Expected expression of type of string at ${r}")
+            _ <- if (rtype !~ StringType) Left(s"Expected expression of type of string at ${r}")
                  else Right(StringType)
         } yield returnType
     }
@@ -301,19 +305,19 @@ object TypeChecker {
     def checkIterBinOp(e: Expr, l: Expr, r: Expr): Result = 
         for {
             ltype <- checkExpr(l)
-            _ <- if (ltype != StrIterType && ltype != IntIterType) Left(s"Expected expression of type of iterator at ${l}")
+            _ <- if (ltype !~ StrIterType && ltype !~ IntIterType) Left(s"Expected expression of type of iterator at ${l}")
                  else Right(IntIterType) // intermediate, doesn't matter
             rtype <- checkExpr(r)
-            _ <- if (rtype != StrIterType && rtype != IntIterType) Left(s"Expected expression of type of iterator at ${r}")
+            _ <- if (rtype !~ StrIterType && rtype !~ IntIterType) Left(s"Expected expression of type of iterator at ${r}")
                  else Right(IntIterType) // intermediate, doesn't matter
-            returnType <- if (ltype != rtype) Left(s"Expected expressions ${l} and ${r} to have same iter type")
+            returnType <- if (ltype !~ rtype) Left(s"Expected expressions ${l} and ${r} to have same iter type")
                           else Right(ltype)
         } yield returnType 
  
     def checkIterUnOp(e: Expr, l: Expr): Result = 
         for {
             ltype <- checkExpr(l)
-            check <- if (ltype != StrIterType && ltype != IntIterType) Left(s"Expected expression of type of iter at ${l}")
+            check <- if (ltype !~ StrIterType && ltype !~ IntIterType) Left(s"Expected expression of type of iter at ${l}")
                      else Right(ltype)
             returnType <- inferIterUnOpType(e, ltype)
         } yield returnType
@@ -330,7 +334,7 @@ object TypeChecker {
     def checkStringUnop(e: Expr, l: Expr): Result =
         for {
             ltype <- checkExpr(l)
-            check <- if (ltype != StringType) Left(s"Expected expression of type of string at ${l}")
+            check <- if (ltype !~ StringType) Left(s"Expected expression of type of string at ${l}")
                      else Right(ltype)
         } yield check
 
@@ -341,14 +345,14 @@ object TypeChecker {
         }
         for {
             ltype <- checkExpr(l)
-            check <- if (ltype != IntType) Left(s"Expected expression of type of int at ${l}")
+            check <- if (ltype !~ IntType) Left(s"Expected expression of type of int at ${l}")
                      else Right(ltype)
         } yield returnType
     }
 
     def intOk(num: Int, width: Int, signed: Boolean, range: Option[Range]): Either[Error, Boolean] = {
-        var lowerBound = if (signed) BigInt(-(2 ^ (width - 1))) else BigInt(0)
-        var upperBound = if (signed) BigInt(2 ^ (width - 1) - 1) else BigInt(2 ^ width - 1)
+        var lowerBound = if (signed) -BigInt(2).pow(width - 1) else BigInt(0)
+        var upperBound = if (signed) BigInt(2).pow(width - 1) - BigInt(1) else BigInt(2).pow(width) - BigInt(1)
 
         var upperRangeBound = upperBound
         var lowerRangeBound = lowerBound 
@@ -382,6 +386,35 @@ object TypeChecker {
             case Some(_) => Right(ProgramType)
         }
         case _ => Right(ProgramType)
+    }
+
+    implicit class TypeSyntax(t: Type) {
+        def ~(other: Type): Boolean = t match {
+            case StringType => other == StringType
+            case IntType => 
+                other.isInstanceOf[IntDeclType] || other == IntType
+            case IntIterType =>  other == IntIterType
+            case StrIterType =>  other == StrIterType
+            case ProgramType =>  other == ProgramType
+            case ErrorType => false
+            case IntDeclType(signed, width) => 
+                other.isInstanceOf[IntDeclType] || other == IntType
+        }
+
+        def !~(other: Type): Boolean = !(t ~ other)
+    }
+
+    implicit class PropertySyntax(p: Property) {
+        def ~(other: Property): Boolean = p match {
+            case t: Type => 
+                other match {
+                    case o: Type => t ~ o
+                    case _ => false
+                }
+            case _ => false
+        }
+
+        def !~(other: Property): Boolean = !(p ~ other)
     }
 }
 

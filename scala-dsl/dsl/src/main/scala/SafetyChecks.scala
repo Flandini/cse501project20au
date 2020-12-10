@@ -135,6 +135,7 @@ object SafetyChecks {
         
         case Decl(t, name, Some(expr)) => {
             // if Int type, will need to check that the RHS range falls within the Int type bounds
+            println(t)
             val optRange: Option[IntervalLatticeElement] = t match {
                 case IntDeclType(signed, width) => Some(Interval.fromSignAndWidth(signed,width))
                 case _ => None
@@ -143,7 +144,8 @@ object SafetyChecks {
             checkExpr(expr, env) match {
                 // If interval analysis passes on RHS
                 case Right((_, _, range, subrange, value)) => {
-
+                    println(s"RHS range: ${range}, RHS value: ${value}")
+                    println(s"Opt range: ${optRange}")
                     // Check that the value fits in the range on the RHS
                     (value, range) match {
                         case (Some(interval_a), Some(interval_b)) => {
@@ -156,8 +158,10 @@ object SafetyChecks {
                     // Check that the RHS range falls in the int type bounds
                     (optRange, range) match {
                         case (Some(l_interval), Some(r_interval)) => {
-                            if (!Interval.containedIn(r_interval, l_interval))
+                            if (!Interval.containedIn(r_interval, l_interval)) {
+                                println(s"${l_interval} <=? ${r_interval}")
                                 return Left(s"Range of expr ${expr} not within range of ${Decl(t,name,Some(expr))}")
+                            }
                         }
                         case _ => {}
                     }
@@ -191,12 +195,18 @@ object SafetyChecks {
         val idxType = types.getTypeForName(idxName)
         val iter = f.iter1.iterator
 
-        val idxInfo = for {
+        val envWithIdx = for {
             iteratorInfo <- checkExpr(iter, env)
             idxInfo <- Right((idxName, idxType, iteratorInfo._4, None, iteratorInfo._4))
         } yield (idxName, idxType, iteratorInfo._4, None, iteratorInfo._4) :: env
-        println(idxInfo)
-        idxInfo
+
+        val envWithAcc = for {
+            origEnv <- envWithIdx
+            newEnv <- checkStmt(f.acc, origEnv, Some(f))
+        } yield newEnv
+
+        println(envWithAcc)
+        envWithAcc
     }
 
     // Just returning a nameless VarInfo tuple with interval, range, and subrange
@@ -323,6 +333,32 @@ object SafetyChecks {
         case _ => Left(s"Checking of ${expr} not yet supported")
     }
 
+    def castSafe(fromSigned: Boolean, fromWidth: Int, fromRange: Option[IntervalLatticeElement], toSigned: Boolean, toWidth: Int): Boolean = {
+        if (fromSigned && !toSigned) {
+            fromRange match {
+                case Some(valRange) => 
+                    Interval.containedIn(valRange, Interval.fromSignAndWidth(toSigned, toWidth))
+                // Assume that all values from ${fromSigned}int${fromWidth}_t
+                case None => false
+            }
+        } else if (!fromSigned && toSigned) {
+            fromRange match {
+                case Some(valRange) => 
+                    Interval.containedIn(valRange, Interval.fromSignAndWidth(toSigned, toWidth))
+                case None => (fromWidth < toWidth) // e.g. uint8_t can fit in int16_t, ...
+            }
+        } else {
+            val defaultCheck = fromWidth <= toWidth
+            val rangeCheck = fromRange match {
+                case Some(valRange) => 
+                    Interval.containedIn(valRange, Interval.fromSignAndWidth(toSigned, toWidth))
+                case None => false
+            }
+            defaultCheck || rangeCheck
+        }
+        false
+    }
+
     def intIterToInterval(iit: IntIter): Either[Errors, VarInfo] =
         Right(
             ("", IntIterType, rangeToInterval(iit.range), rangeToInterval(iit.subrange), None)
@@ -353,8 +389,8 @@ object SafetyChecks {
         val signed = int.signed
         val range = int.range
 
-        var lowerBound = if (signed) BigInt(-(2 ^ (width - 1))) else BigInt(0)
-        var upperBound = if (signed) BigInt(2 ^ (width - 1) - 1) else BigInt(2 ^ width - 1)
+        var lowerBound = if (signed) -BigInt(2).pow(width - 1) else BigInt(0)
+        var upperBound = if (signed) BigInt(2).pow(width - 1) - BigInt(1) else BigInt(2).pow(width) - BigInt(1)
 
         var upperRangeBound = upperBound
         var lowerRangeBound = lowerBound 

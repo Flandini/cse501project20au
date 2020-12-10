@@ -19,8 +19,10 @@ object Interval extends Lattice[IntervalLatticeElement]  {
     def fromInts(lo: Int, hi: Int): IntervalLatticeElement = fromBigInts(BigInt(lo), BigInt(hi))
     def fromSignAndWidth(signed: Boolean, width: Int): IntervalLatticeElement =
         Interval.fromBigInts(
-            if (signed) BigInt(-(Math.pow(2, (width - 1)).toInt)) else BigInt(0),
-            if (signed) BigInt(Math.pow(2, width-1).toInt - 1) else BigInt(Math.pow(2, width).toInt - 1)
+            //if signed then -(2 ^ 31) else 0
+            if (signed) -BigInt(2).pow(width - 1) else BigInt(0),
+            //if signed then (2 ^ 31) - 1 else (2 ^ 32) - 1
+            if (signed) BigInt(2).pow(width - 1) - BigInt(1) else BigInt(2).pow(width) - BigInt(1)
         )
     def defaultLengthInterval: IntervalLatticeElement =
         Interval.fromSignAndWidth(false, 64)
