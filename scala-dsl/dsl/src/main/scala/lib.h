@@ -33,19 +33,19 @@ size_t char_iter_length(char** iter)
 }
 
 // Stuck here for fuzzing
-int32_t* scan_line(char* clause_line) {
-    char* lit;
-    char* delim0 = " ";
-    char* pass_through_0 = clause_line;
-    char* pass_through_0_dup_0 = strdup(pass_through_0);
-    char** iterator0 = str_split(pass_through_0_dup_0, delim0);
-    int32_t* literals  = calloc(char_iter_length(iterator0), sizeof(int32_t));
+// int32_t* scan_line(char* clause_line) {
+//     char* lit;
+//     char* delim0 = " ";
+//     char* pass_through_0 = clause_line;
+//     char* pass_through_0_dup_0 = strdup(pass_through_0);
+//     char** iterator0 = str_split(pass_through_0_dup_0, delim0);
+//     int32_t* literals  = calloc(char_iter_length(iterator0), sizeof(int32_t));
 
-    for (uint32_t i_0 = 0; (lit = iterator0[i_0]); ++i_0) {
-        literals[i_0] = atoi(lit);
-    }
+//     for (uint32_t i_0 = 0; (lit = iterator0[i_0]); ++i_0) {
+//         literals[i_0] = atoi(lit);
+//     }
 
-    free (pass_through_0_dup_0);
-    free (iterator0);
-    return literals;
-}
+//     free (pass_through_0_dup_0);
+//     free (iterator0);
+//     return literals;
+// }

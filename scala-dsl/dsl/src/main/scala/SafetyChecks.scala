@@ -88,8 +88,10 @@ object SafetyChecks {
                 case Right((_, rhsType, rhsRange, rhsSubrange, rhsValue)) => lookup("returnType", env) match {
                     // Two things, rhs must be castable to returnType and satisfy user provided constraints
                     case Right((_, lhsType, lhsRange, _, _)) => 
-                        if (!castSafe(rhsType, lhsRange, lhsType))
+                        if (!castSafe(rhsType, lhsRange, lhsType)) {
+                            printEnv(Right(env))
                             Left(s"expression in 'return ${expr}' is not castable to ${lhsType}")
+                        }
                         else if (!containedIn(rhsValue, lhsRange) && !containedIn(rhsRange, lhsRange))
                             Left(s"expression in 'return ${expr} has value ${rhsValue} and range ${rhsRange} which does not fit in expected ${lhsRange}'")
                         else
@@ -218,8 +220,14 @@ object SafetyChecks {
             case Left(err) => Left(err)
             case Right((_, t, range, subrange, value)) => {
                 val envWithNoAcc = env.filter(x => x._1 != accName)
-                val newAccInfo = (accName, t, range, subrange, value)
-                Right(newAccInfo :: envWithNoAcc)
+                lookup(accName, env) match {
+                    case Left(err) => Left(err)
+                    case Right((n, accT, accRange, accSubrange, accValue)) =>
+                        if (accT == IntIterType || accT == StrIterType)
+                            Right((n, accT, accRange, subrange, value) :: envWithNoAcc)
+                        else
+                            Right((n, t, range, subrange, value) :: envWithNoAcc)
+                }
             }
         }
     }
@@ -320,7 +328,6 @@ object SafetyChecks {
 
         case Ston(left) => checkExpr(left, env) match {
             case Right((_, t, range, subrange, value)) => {
-
                 val stringRange = value match {
                     case Some(Interval(lo, hi)) => Some(Interval.fromBigInts(0, digitsInBigInt(lo).max(digitsInBigInt(hi))))
                     case _ => None
@@ -375,6 +382,7 @@ object SafetyChecks {
             castSafe(signed, width, fromRange, true, 32)
         case (IntDeclType(fromSigned, fromWidth), IntDeclType(toSigned, toWidth)) => 
             castSafe(fromSigned, fromWidth, fromRange, toSigned, toWidth)
+        case (x, y) if x == y => true
         case _ => false
     }
     def castSafe(fromSigned: Boolean, fromWidth: Int, fromRange: Option[IntervalLatticeElement], toSigned: Boolean, toWidth: Int): Boolean = {
@@ -470,14 +478,22 @@ object SafetyChecks {
             1 + digitsInBigInt(num / BigInt(10))
 
     def stringLengthToLowDigit(len: BigInt, tmp: String = ""): BigInt =
-        if (tmp.length() == len - 1)
+        if (BigInt(tmp.length()) == len - BigInt(1))
             BigInt(("-" ++ tmp).toInt)
+        else if (len == BigInt(0))
+            BigInt(0)
+        else if (len >= 11)
+            -BigInt(2).pow(31)
         else
             stringLengthToLowDigit(len, tmp ++ "9")
 
     def stringLengthToHighDigit(len: BigInt, tmp: String = ""): BigInt =
-        if (tmp.length() == len)
+        if (BigInt(tmp.length()) == len)
             BigInt(tmp.toInt)
+        else if (len == BigInt(0))
+            BigInt(0)
+        else if (len >= 10)
+            BigInt(2).pow(31) - BigInt(1)
         else
             stringLengthToHighDigit(len, tmp ++ "9")
 
