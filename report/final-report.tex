@@ -3,7 +3,10 @@
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{hyperref}
+\usepackage{graphicx}
 \usepackage{comment}
+
+\graphicspath{ {./images/} }
 
 \title{A DSL for writing safer string manipulation functions in C}
 \author{Michael Flanders}
@@ -45,6 +48,13 @@
 % For loops
 
 \section{Design and decisions}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{architecture.png}
+  \caption{Diagram of the compiler pipeline}
+  \label{fig:pipeline}
+\end{figure}
 
 % Overview
 % Lexer/parser vs fluent-syntax/call-chaining
