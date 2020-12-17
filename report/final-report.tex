@@ -36,7 +36,7 @@
 For this project, I built a DSL that prevents the common string and
 integer related vulnerabilities and undefined behaviors in C programs.
 The DSL is a small, restricted subset of C with some additional constructs
-like $String$ types, range and subrange constraints, and bounded,
+like $String$ types, iterators, range and subrange constraints, and bounded,
 fold-style loops. By raising the abstraction level of strings and loops
 and using the range constraints in typechecking and static analysis,
 most of the common string vulnerabilities can be eliminated.
@@ -71,7 +71,7 @@ provide code here since I think distributing decompiled, closed-source code
 is not very legal, but the example is from a vulnerability I found in Netgear
 routers last year: https://www.zerodayinitiative.com/advisories/ZDI-19-866/.
 
-The code snippet below shows a function from the mini\_httpd
+Figure \ref{fig:minihttpd} shows a function from the mini\_httpd
 HTTP server that decodes HTML-Url encoded strings. This
 same code is used in thttpd which powers sites such as
 images.paypal.com, garfield.com, drudgereport.com, and
@@ -86,9 +86,9 @@ that allows networks guests to execute arbitrary code on the router
 as an administrator.
 
 
-%\begin{figure}
-%  \centering
-  \begin{lstlisting}
+\begin{figure}
+\centering
+\begin{lstlisting}
   static void
   strdecode( char* to, char* from )
   {
@@ -104,10 +104,10 @@ as an administrator.
     }
     *to = '\0';
   }
-  \end{lstlisting}
-%  \caption{Code snippet from mini\_httpd}
-%  \label{fig:minihttpd}
-%\end{figure}
+\end{lstlisting}
+\caption{Code snippet from mini\_httpd}
+\label{fig:minihttpd}
+\end{figure}
 
 This is a case where the DSL would shine; static analyzers, symbolic
 execution, and fuzzing would all miss the vulnerability. The vulnerability
@@ -139,6 +139,113 @@ in this case.
 % Ranges, subranges
 % For loops
 
+\subsection{Overview}
+
+The language is a small subset of C with
+additional constructs: range constraints on types, $String$ types instead
+of char*, iterator types, and bounded, for-style for-loops. Additional changes
+to the usual C semantics include making all variables immutable, assigning
+default range constraints to non-constrained values, preventing recursion,
+and removing  other confusing features of C such as assignments in conditional
+checks, pointers, pointer arithmetic, and casting between non-numeric types.
+
+I believe that raising string manipulation from char* operators to String
+operations will remove most of the common string vulnerabilities. However,
+there could still be problems when mixing integers and strings. For example,
+a common way that buffer overflows occur is performing arithmetic on string
+lengths and using the results to allocate new memory or bound string operations
+like $strncmp$. Since many C developers default to using $int$ as their default
+numeric type, signed values often make their way into the C std string functions
+which operate on unsigned types. The castings that occur can result in allocating
+too small buffers or copying too much data which can both cause serious vulnerabilities.
+
+Since the generated C code will use some of these C std string functions, the DSL
+needs to guarantee that no problematic integer behavior will happen. To check for
+this behavior, I decided to use abstract interpretation using an interval domain.
+Using the results from the analysis, I can check that, for example, when casting
+from a signed type to an unsigned type, the signed value could not have been negative.
+The range and subrange constraints help the abstract interpretation by reducing false
+positives, simplifying some safety checks, and also add more meaning to the code.
+
+The iterator and for-style for-loops are important because they prevent pointer
+arithmetic and bound issues when iterating over arrays of strings and numbers.
+As an example, the string split function returns an array of strings. If the DSL
+left iterating over this array of strings to the usual C-style for-loops, the
+code could still be vulnerable to out-of-bounds accesses and overflows. 
+
+The other language features like immutability, lack of recursion, and lack of
+explicit casts are just to futher simplify analyses and to make the developer's
+life a bit easier.
+
+\subsection{Syntax and semantics}
+
+\subsubsection{Expressions}
+
+The DSL provides the following string functions: ston (string-to-number), split,
+equals, concat, append, and length. The equivalent ntos (number-to-string) is
+provided for int types as well as the operators: $+$, $-$, $*$, $/$, $<$, $>$, $<=$,
+$>=$, $!$, $\&\&$, and $||$. The DSL also provides the following operations on
+iterator types: concat, first, and length.
+
+I came up with these functions by rewriting string.h and writing my easy, medium,
+and hard example programs using the DSL. I ended up getting rid of lots of other
+string functions since they could just be built from these string functions as
+syntactic sugar.
+
+\subsubsection{Statements}
+
+There are four statements in the DSL: for, if, return, and assignments. If, return
+and assignments have their usual semantics, but the for loops are different. An example
+for loop is shown in Figure \ref{fig:forloopsyntax}.
+
+The values in the for-header
+have a left hand side (LHS) and a right hand side (RHS) delimited by the pipe. The LHS
+must have 1 or 2 expressions of the form $varName : expr$ delimited by a comma. I
+decided to allow the second iterator since I could not think of another way to compare
+two strings or iterators in the DSL. If 2 iterators are specified in the LHS, then the
+loop iterates until the shorter one is exhausted. The RHS requires the declaration of an
+accumulator value, and this is a normal declaration except that it doesn't have to be
+initialized or assigned a value. For example, in Figure \ref{fig:forloopsyntax},
+\textit{int acc = 0} could also be written as \textit{int acc}, and values would get default values
+of 0, empty string, or empty iterator.
+
+The body of the for loop consists of 0 or more statements with one terminating
+expression used to update the accumulator.
+
+\begin{figure}[h]
+\centering
+\begin{lstlisting}
+    for ( c1 : str1, c2 : str2 | int acc = 0 ) {
+      ...optional statements...
+      ...required terminating expression that updates acc...
+    }
+\end{lstlisting}
+\caption{Example of for-loop syntax}
+\label{fig:forloopsyntax}
+\end{figure}
+
+\subsubsection{Functions}
+
+Declaring a function is done in the DSL similarly to how it is done in C.
+The only addition are range constraints on the return value and arguments
+as shown in Figure \ref{fig:functionsyntax}. In Figure \ref{fig:functionsyntax},
+the return value must be of type \textit{uint8\_t} and must be contained in
+the inclusive interval $[0, 255]$. The argument \textit{numbers} is an iterator
+over \textit{int32\_t} types. The iterator can hold at most 50000 numbers (inclusive),
+and each \textit{int32\_t} value in the iterator must be contained in the
+inclusive interval $[1, 255]$.
+
+\begin{figure}[h]
+\centering
+\begin{lstlisting}
+    uint8_t {0, 255} averageish(int32_iter_t {1, 255} {0, 50000} numbers) {
+      ...statements...
+    }
+\end{lstlisting}
+\caption{Example function declaration}
+\label{fig:functionsyntax}
+\end{figure}
+
 \section{Design and decisions}
 
 \begin{figure}[h]
@@ -154,6 +261,17 @@ in this case.
   \caption{Diagram of the compiler pipeline. (Screenshot from the marked up lecture slides)}
   \label{fig:mdnpipeline}
 \end{figure}
+
+The structure of the compiler is shown in Figure \ref{fig:pipeline}. All of it
+is implemented in Scala, and the DSL code is written using a fluent-syntax,
+call-chaining style. After calling $compile$ on the DSL code, the compiler
+builds the AST, performs type checking and an interval analysis, and then
+outputs the DSL code as a C header file if no bugs are found.
+
+\subsection{Interface}
+\subsection{Typechecking}
+\subsection{Abstract interpretation}
+\subsection{Code generation and safe-string library}
 
 % Overview
 % Lexer/parser vs fluent-syntax/call-chaining
@@ -183,6 +301,13 @@ in this case.
 
 \section{Discussion}
 
+\subsection{Things not finished and cheats to finish up the demos for the presentation}
+\subsection{Neat features}
+\subsection{Mistakes}
+\subsection{What I would do differently}
+\subsection{What knowledge or skill would have helped with the project}
+
+% Cheats to finish up the demos for the presentation
 % Answer the questions from the last slide (of the template?)
 %  What are you proud of? A neat trick in the design or implementation
 %    of your language.
