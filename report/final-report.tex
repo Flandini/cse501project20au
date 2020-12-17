@@ -33,12 +33,13 @@
 % Overview of project
 % Overview of the sections
 
-The goal of the project was to build a DSL that prevents the common
-string and integer related vulnerabilities and undefined behaviors
-in C programs. It does this by raising the abstraction level of
-strings and loops, providing optional range constraints on types,
-and baking in typechecking and program analysis to prevent the
-remaining int type problems.
+For this project, I built a DSL that prevents the common string and
+integer related vulnerabilities and undefined behaviors in C programs.
+The DSL is a small, restricted subset of C with some additional constructs
+like $String$ types, range and subrange constraints, and bounded,
+fold-style loops. By raising the abstraction level of strings and loops
+and using the range constraints in typechecking and static analysis,
+most of the common string vulnerabilities can be eliminated.
 
 This report provides an analysis of the problem domain, a description
 of the DSL, a breakdown of the design and design decisions made, and
@@ -56,56 +57,37 @@ the project to help provide a stronger outer shell.
 These security guarantees do have a cost since the performance of the
 generated C code cannot compare to the performance that an experienced
 C developer might be able to achieve. However, I would argue that even
-using the DSL only on validation, sanitization, and pre-processing would
+using the DSL only on validation, sanitization, and pre-processing code would
 provide a lot of security benefits while only having a slight performance
 impact (since most of the program logic is probably not contained in these
 routines).
 
-Some example programs that might benefit from using the DSL are HTTP
-servers and SAT solvers. \ref{fig:microsat} shows a snippet of the
-DIMACS parsing code from the microsat solver. The main focus of SAT
-solvers is performance, but for SAT solvers that are used in production
-code, the performance hit from writing the parser in the DSL might
-be worth the security guarantees. 
+\subsection{A motivating example}
 
-\begin{figure}
-  \centering
-  \begin{lstlisting}
-    int nZeros = S->nClauses, size = 0;                     
-    while (nZeros > 0) {                          
-      int ch = getc (input);
-      if (ch == ' ' || ch == '\n') continue;
-      if (ch == 'c') { read_until_new_line (input); continue; }
-      ungetc (ch, input);
-      int lit = 0; tmp = fscanf (input, " %i ", &lit);      
-      if (!lit) {                                           
-        int* clause = addClause (S, S->buffer, size, 1);  
-        if (!size || ((size == 1) && S->false[clause[0]]))  
-        return UNSAT;                                   
-        if ((size == 1) && !S->false[-clause[0]]) {  
-          assign (S, clause, 1); }            
-        size = 0; --nZeros; }
-      else S->buffer[size++] = lit; }
-  \end{lstlisting}
-   \caption{Code snippet from the microsat solver}
-  \label{fig:microsat}
-\end{figure}
+There are many codebases that could benefit from having their input processing
+code rewritten in the DSL, but here I provide only one such example where the
+DSL beats static analyzers, symbolic execution, and fuzzers. I do not
+provide code here since I think distributing decompiled, closed-source code
+is not very legal, but the example is from a vulnerability I found in Netgear
+routers last year: https://www.zerodayinitiative.com/advisories/ZDI-19-866/.
 
-\ref{fig:minihttpd} shows a function from the mini\_httpd
+The code snippet below shows a function from the mini\_httpd
 HTTP server that decodes HTML-Url encoded strings. This
 same code is used in thttpd which powers sites such as
 images.paypal.com, garfield.com, drudgereport.com, and
 the official website of the Sovereign Principality of Sealand.
 
 Another notable user of mini\_httpd is Netgear. Earlier
-models of Netgear routers (pre-2016), use a modified version of this
-function that introduced a severe vulnerability that allows network
-guests to execute code on the router with administrator privileges
-(https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-17137).
+models of Netgear routers (pre-2018), use a modified version of mini\_httpd
+with modifications to the decoding and sanitization functions such as
+the one shown below. These modifications make connecting to the router
+from the Netgear phone app simpler, but also introduce a severe vulnerability
+that allows networks guests to execute arbitrary code on the router
+as an administrator.
 
 
-\begin{figure}
-  \centering
+%\begin{figure}
+%  \centering
   \begin{lstlisting}
   static void
   strdecode( char* to, char* from )
@@ -123,16 +105,31 @@ guests to execute code on the router with administrator privileges
     *to = '\0';
   }
   \end{lstlisting}
-  \caption{Code snippet from mini\_httpd}
-  \label{fig:minihttpd}
-\end{figure}
+%  \caption{Code snippet from mini\_httpd}
+%  \label{fig:minihttpd}
+%\end{figure}
 
-Alternative approaches: static analyzers, fuzzers,
-and symbolic executors
+This is a case where the DSL would shine; static analyzers, symbolic
+execution, and fuzzing would all miss the vulnerability. The vulnerability
+is caused by an incorrect implementation of a check for contained substrings
+and bad pointer arithmetic. However, there is no undefined behaviour or
+out-of-bounds accesses, so static analyzers and tools like KLEE or CBMC
+will not warn. The strings needed to trigger the vulnerability are also
+very complex; the vulnerability requires providing valid URL's that the
+server transforms into an exploit/payload during sanitization and validation.
+By providing a very carefully crafted URL, an attacker can trick the server
+into inserting a null-byte within a string buffer (this turns one string into
+two and is called a poison null-byte vulnerability), performing validity checks on the
+second string, and then using the first string. Complex dependencies on
+network connections and filesystem further complicate the situation for fuzzers.
 
-% vs runtime checks vs static analyzers vs SE
-% Sample problems from slides
-% Easy, medium, hard samples
+Writing the validation and decoding functions in the DSL would have avoided
+this vulnerability. Even though there is no guarantee on functional correctness
+of programs written in the DSL, the high-level string functions remove the
+need to worry about null bytes and terminators, so this vulnerability could not
+even have been written. In other words, the \textit{pre-provided} string functions in the DSL
+should always compile to safe and functionally correct C code which is enough
+in this case.
 
 \section{Language description}
 
