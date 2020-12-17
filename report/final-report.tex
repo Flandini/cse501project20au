@@ -71,8 +71,8 @@ There are many codebases that could benefit from having their input processing
 code rewritten in the DSL, but here I provide only one such example where the
 DSL beats static analyzers, symbolic execution, and fuzzers. I do not
 provide code here since I think distributing decompiled, closed-source code
-is not very legal, but the example is from a vulnerability I found in Netgear
-routers last year: https://www.zerodayinitiative.com/advisories/ZDI-19-866/.
+is not very legal, but the example is from a \href{https://www.zerodayinitiative.com/advisories/ZDI-19-866/}
+{vulnerability I found in Netgear routers last year.}
 
 Figure \ref{fig:minihttpd} shows a function from the mini\_httpd
 HTTP server that decodes HTML-Url encoded strings. This
@@ -203,7 +203,7 @@ and assignments have their usual semantics, but the for loops are different. An 
 for loop is shown in Figure \ref{fig:forloopsyntax}.
 
 The values in the for-header
-have a left hand side (LHS) and a right hand side (RHS) delimited by the pipe. The LHS
+have a left hand side (LHS) and a right hand side (RHS) separated by a pipe. The LHS
 must have 1 or 2 expressions of the form $varName : expr$ delimited by a comma. I
 decided to allow the second iterator since I could not think of another way to compare
 two strings or iterators in the DSL. If 2 iterators are specified in the LHS, then the
@@ -253,6 +253,12 @@ inclusive interval $[1, 255]$.
 \section{Design and decisions}
 \label{sec:design}
 
+The structure of the compiler is shown in Figure \ref{fig:pipeline}. All of it
+is implemented in Scala, and the DSL code is written using a fluent-syntax,
+call-chaining style. After calling $compile$ on the DSL code, the compiler
+builds the AST, performs type checking and an interval analysis, and then
+outputs the DSL code as a C header file if no bugs are found.
+
 \begin{figure}[h]
   \centering
   \includegraphics[width=\textwidth]{architecture.png}
@@ -267,13 +273,55 @@ inclusive interval $[1, 255]$.
   \label{fig:mdnpipeline}
 \end{figure}
 
-The structure of the compiler is shown in Figure \ref{fig:pipeline}. All of it
-is implemented in Scala, and the DSL code is written using a fluent-syntax,
-call-chaining style. After calling $compile$ on the DSL code, the compiler
-builds the AST, performs type checking and an interval analysis, and then
-outputs the DSL code as a C header file if no bugs are found.
 
 \subsection{Interface}
+
+The interface of the compiler is shown as the \textit{Scala DSL} box in
+figure \ref{fig:pipeline}. It is the equivalent of the \textit{embedded}
+and \textit{parser} blocks of the pipeline shown in figure \ref{fig:mdnpipeline}.
+Originally, I was using a lexer and parser to make the syntax similar to
+C as shown in figures \ref{fig:forloopsyntax} and \ref{fig:functionsyntax}, but
+I switched to a fluent-syntax style in scala. The two styles are shown with
+equivalent code in figures \ref{fig:csyntax} and \ref{fig:fluentsyntax}.
+
+\begin{figure}[h]
+  \centering
+  \begin{lstlisting}
+num_iter scan_line (string clause_line)
+  {
+    for (lit : str_split (clause_line, " ") | num_iter literals )
+    {
+      ston(lit);
+    }
+
+    return literals;
+  }
+  \end{lstlisting}
+  \caption{Original, C-familiar syntax using a lexer and parser}
+  \label{fig:csyntax}
+\end{figure}
+
+\begin{figure}[h]
+    \begin{lstlisting}
+val scanner = 
+      Function("scan_line")
+        .returnType(IntIterT())
+        .arg(Argument("clause_line").withType(StringT))
+        .startFunction()
+           .loop(
+             ForEach("lit")
+               .inExpr(Var("clause_line").split(" "))
+               .withAcc(Variable("literals").withType(IntIterT()))
+               .startFor()
+                 .setAcc(Var("lit").ston)
+               .endFor)
+           .ret(Var("literals"))
+        .endFunction
+    \end{lstlisting}
+  \caption{New, fluent-syntax interface in Scala}
+    \label{fig:fluentsyntax}
+\end{figure}
+
 \subsection{Typechecking}
 \subsection{Abstract interpretation}
 \subsection{Code generation and safe-string library}
