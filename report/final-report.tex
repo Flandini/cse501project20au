@@ -4,6 +4,7 @@
 \usepackage{amsmath}
 \usepackage{listings}
 \usepackage{hyperref}
+% https://tex.stackexchange.com/questions/180571/making-clickable-links-to-sections-with-hyperref
 \usepackage{graphicx}
 \usepackage{comment}
 
@@ -41,11 +42,13 @@ fold-style loops. By raising the abstraction level of strings and loops
 and using the range constraints in typechecking and static analysis,
 most of the common string vulnerabilities can be eliminated.
 
-This report provides an analysis of the problem domain, a description
-of the DSL, a breakdown of the design and design decisions made, and
-a discussion of the project.
+This report provides an \hyperref[sec:domain]{analysis of the problem domain (\S1)},
+\hyperref[sec:language]{a description of the DSL (\S2)},
+\hyperref[sec:design]{a breakdown of the design and design decisions made (\S3)},
+and \hyperref[sec:discussion]{a discussion of the project (\S4)}.
 
 \section{Domain analysis}
+\label{sec:domain}
 
 I built the DSL as a development aid for new or moderately experienced
 C developers. These developers would be writing some C application
@@ -80,10 +83,10 @@ the official website of the Sovereign Principality of Sealand.
 Another notable user of mini\_httpd is Netgear. Earlier
 models of Netgear routers (pre-2018), use a modified version of mini\_httpd
 with modifications to the decoding and sanitization functions such as
-the one shown below. These modifications make connecting to the router
-from the Netgear phone app simpler, but also introduce a severe vulnerability
-that allows networks guests to execute arbitrary code on the router
-as an administrator.
+the one shown in figure \ref{fig:minihttpd}. These modifications make connecting
+to the router from the Netgear phone app simpler, but also introduce a
+severe vulnerability that allows networks guests to execute arbitrary code
+on the router as an administrator.
 
 
 \begin{figure}
@@ -121,7 +124,7 @@ By providing a very carefully crafted URL, an attacker can trick the server
 into inserting a null-byte within a string buffer (this turns one string into
 two and is called a poison null-byte vulnerability), performing validity checks on the
 second string, and then using the first string. Complex dependencies on
-network connections and filesystem further complicate the situation for fuzzers.
+network connections and the filesystem further complicate the situation for fuzzers.
 
 Writing the validation and decoding functions in the DSL would have avoided
 this vulnerability. Even though there is no guarantee on functional correctness
@@ -132,6 +135,7 @@ should always compile to safe and functionally correct C code which is enough
 in this case.
 
 \section{Language description}
+\label{sec:language}
 
 % Overview
 % Paradigm, immutability, boundedness
@@ -247,6 +251,7 @@ inclusive interval $[1, 255]$.
 \end{figure}
 
 \section{Design and decisions}
+\label{sec:design}
 
 \begin{figure}[h]
   \centering
@@ -300,6 +305,7 @@ outputs the DSL code as a C header file if no bugs are found.
 %     developers might not trust it
 
 \section{Discussion}
+\label{sec:discussion}
 
 \subsection{Things not finished and cheats to finish up the demos for the presentation}
 \subsection{Neat features}
