@@ -322,63 +322,179 @@ val scanner =
     \label{fig:fluentsyntax}
 \end{figure}
 
-\subsection{Typechecking}
-\subsection{Abstract interpretation}
-\subsection{Code generation and safe-string library}
+The fluent syntax is not fully defined for all language features.
+I left the syntax as the last thing I worked on, so I only implemented
+features from my easy and medium examples. Things like the if-statement
+were not added to the syntax. The implementation of the syntax is
+in the \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/Syntax.scala}
+{Syntax.scala file} in the repo. The example from figure \ref{fig:fluentsyntax} is at the bottom of that file.
 
-% Overview
-% Lexer/parser vs fluent-syntax/call-chaining
-% Typechecker
-%  the basics and some of the other checks:
-%   no recursion
-%   ranges well formed (lower bound <=  upper bound)
-%  monadic, pretty proud of this. Lots of Option,Either mixed, wished it was cleaner still
-% Abstract interpreter
-%  abstract domain is intervals
-%  didn't finish, couldn't get 
-%  everything is bounded, all loops end => widening and narrowing are optimizations
-%   not necessities, so easier to just build abs int, act like normal interpreter and
-%   just ride loops out
-%  vs symbolic execution
-%   ended up seeming like more work getting the integer semantics symbolic but
-%   i think it would've ended up just as precise but a little slower
-% Code generation
-%  Didn't finish this, couldn't get:
-%    most of the string functions written
-%    freeing of complicated data
-%     2 solutions, copy/dupe all strings from iters or some kind of analysis
-%  the safe string library
-%    static inlined
-%    could get the code gen to just write one C function but it ended up looking messy,
-%     developers might not trust it
+\subsection{Typechecking}
+
+The compiler does the usual typechecking (e.g., strings are not
+being subtracted or multiplied). There are \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/TypeCheck.scala#L29}{two passes} since multiple functions can be defined.
+There are also some DSL specific checks like no recursive function
+calls and the lower bound of a range is less than or equal to
+the upper bound of the range. 
+
+\subsection{Abstract interpretation}
+
+The interval semantics and domain are defined in \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/Interval.scala#L150}{this file}, and the analysis is implemented in \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/SafetyChecks.scala}{this file}. 
+
+I decided last-minute to switch to abstract interpretation
+over symbolic execution. I felt that it would be easier to get
+an abstract interpreter finished than it would be the symbolic
+execution engine with all the tricky integer semantics. I also
+think that for my DSL, the two are equally as precise. Also,
+since all values are bounded and all programs terminate, widening
+and narrowing are optimizations and not necessities which made
+writing the abstract interpreter much easier; I just wrote an
+interpreter using the interval domain and ride out loops.
+
+I wrote most of the abstract interpreter last minute since I needed
+to have at least the code generation working for the demo. The \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/SafetyChecks.scala#L15}{code}
+for this part of the project ended up \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/SafetyChecks.scala#L218}{\textit{very} messy} as a result.
+I also did not finish the semantics for any of the string and iterator
+expressions not used in the sample programs. I also did not get
+integer-promotion fully implemented in the abstract interpreter,
+so the analysis is currently unsound.
+
+The analysis is working pretty well though. Actually, well enough that it
+caught problems in my sample programs that I hadn't caught. I originally planned to
+demo both the \href{https://github.com/Flandini/cse501project20au/blob/master/samples/easy/single_line_dimacs_scanner.sal}{easy example}
+and the \href{https://github.com/Flandini/cse501project20au/blob/master/samples/medium/array_average.sal}{medium example},
+but the analyzer found issues with the medium example.
+
+The analyzer found the potential div by zero when the numbers iterator
+has length $0$. I changed the bound on the iterator to be $\{1, 50000\}$, but
+then the analyzer complained about the potential truncation on the return
+value since the analyzer says that \textit{averageish} is from the range
+$[0, 12750000]$, but the return value is constrainted to $[0, 255]$. This
+results from the interval analysis being too coarse; it does not associate
+that the range of \textit{acc} is dependent on the range of the length of
+the iterator \textit{numbers}--i.e., when numbers contains only 1 element
+(and that element is constrained to $[0, 255]$), the analyzer still says
+that the sum of all numbers could be $[0, 12750000]$.
+
+\subsection{Code generation}
+
+I also couldn't get all of code generation finished. I didn't get
+if-statements and \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/Codegen.scala#L242}{
+some string and iterator expressions} finished. There is enough of it
+finished though to get the easy and medium examples and some small
+test cases generated. The code generation part was pretty easy though
+since there are no optimizations, so given another 2-3 hours, I could
+probably get it completely finished.
+
+Most of the code generation just uses templates. For example, there is an
+idiomatic way of safely splitting strings in C (\textit{str\_split} in the DSL),
+so the DSL just spits out a \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/Codegen.scala#L267}{string template for a \textit{str\_split} expression}.
+Variable names might need to be changed, and RHS-value type expressions might need to be
+stored, but the template is always the same.
+
+Some code shouldn't be generated and stuck in a function body using the templating-method.
+The code might be too long or too unreadable if inserted in place, so those go in the
+\href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/lib.h#L7}{pre-defined
+  safe string library} where they are static and inlined.
+
+
+The generated code for figures \ref{fig:csyntax} and \ref{fig:fluentsyntax}
+is given in figure \ref{fig:gencode}.
+
+\begin{figure}[h]
+  \centering
+  \begin{lstlisting}
+int32_t* scan_line(char* clause_line) {
+  char* lit;
+  char* delim0 = " ";
+  char* pass_through_0 = clause_line;
+  char* pass_through_0_dup_0 = strdup(pass_through_0);
+  char** iterator0 = str_split(pass_through_0_dup_0, delim0);
+  int32_t* literals  = calloc(char_iter_length(iterator0), sizeof(int32_t));
+
+  for (uint32_t i_0 = 0; (lit = iterator0[i_0]); ++i_0) {
+      literals[i_0] = atoi(lit);
+  }
+
+  free (pass_through_0_dup_0);
+  return literals;
+}
+  \end{lstlisting}
+  \caption{Code generated for the \href{https://github.com/Flandini/cse501project20au/blob/master/samples/easy/single_line_dimacs_scanner.sal}{easy sample program} shown in \ref{fig:csyntax} and
+    \ref{fig:fluentsyntax}. Spacing was originally messed up, so I've prettified the
+    indents.}
+  \label{fig:gencode}
+\end{figure}
+
+The \textit{pass\_through\_0} variable is just an intermediate value; the DSL assigns RHS values
+(expressions) to these indexed variables so that these expressions can later be referred
+to. This needs to be done to some expressions to avoid re-computing them.
+
+The code generator isn't smart enough to insert the \textit{free} call for \textit{iterator0} at
+the end of the function, so \textbf{there is a memory leak}. There would have to be more
+analysis to figure out what is safe to free relative to what is being returned, or all strings
+would have to be copied on assignment.
 
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{Things not finished and cheats to finish up the demos for the presentation}
+\subsection{Things not finished}
+
+All of the type checker and AST are finished. Abstract interpretation is very sloppy
+and is not implemented for some string and iterator expressions, if-statements, and
+integer promotion. Code generation is also not finished for the same string and iterator
+expressions as well as if-statements. The hard goal of being able to declare multiple
+functions in the DSL as a library is also not fully implemented. The type checker and AST
+allow this, but the abstract interpreter and code gen can't handle this. 
+
 \subsection{Neat features}
+
+\begin{itemize}
+  \item I am pretty proud of myself for \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/Interval.scala#L2}{using TypeLevel's algebra library for its \textit{Lattice} trait} in defining the interval domain.
+
+  \item I am pretty proud of the \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/TypeCheck.scala#L99}{monadic style of the type checker}.
+
+  \item I am not used to functional programming or typing (my first exposure to the lambda calculus and typed lambda calculus was this course), so I'm also pretty proud that I did it all in Scala.
+
+  \item I am pretty proud of the \href{https://github.com/Flandini/cse501project20au/blob/master/scala-dsl/dsl/src/main/scala/SafetyChecks.scala#L480}{interval analysis of the \textit{ston} and \textit{ntos} (string-to-number and number-to-string) expressions}. I originally thought that this would be pretty difficult, but writing the code to bound based on potential number of digits or characters was fun.
+\end{itemize}
+
 \subsection{Mistakes}
+
+I did not define the project well enough in the beginning, and my sample programs
+were not (and still are not) concrete enough. I also made the project too big and
+difficult given the course given the scope, time, and that this is also not a
+research project.
+
+
 \subsection{What I would do differently}
+Two things: 1) I would find concrete examples of buggy, C-string code I wanted
+to rewrite in the DSL, and 2) build the DSL/compiler starting much smaller.
+
+I am pretty familiar with string and integer related C and C++ vulnerabilities,
+and thinking that I am pretty familiar with these vulnerabilities made me
+work backwards from the solution to the problem. I think I could've had a much
+more concrete and better problem definition if I looked at some buggy, C-string
+code, formed the problem and some examples, and then built my DSL as solution.
+I think I could have saved myself 2-3 weeks worth of work.
+
+I would also only handle string and integer expressions first. I would build
+the AST, typechecker, absint, and code generation for these first, and then
+slowly build out to statements, control flow, functions, and then multiple
+functions. These were the most stressful and important parts. I think that
+doing this would have been much more efficient than building all of the
+type checker for all AST nodes and then all of the abs int for all AST nodes
+and so on.
+
 \subsection{What knowledge or skill would have helped with the project}
 
-% Cheats to finish up the demos for the presentation
-% Answer the questions from the last slide (of the template?)
-%  What are you proud of? A neat trick in the design or implementation
-%    of your language.
-%
-%  Mistakes describe a mistak you made, e.g., a construct you think will confuse programmers
-%
-%  What we would do differently
-%    Give the lessons you learnt in this project, if you have to start again, what would you do differently?
-%
-% "What knowledge or skill would have helped you be more successful in the project?"
-%
-%   Wish we got some deeper monadic/parametrized interpreter coding homeworks. I did the
-%   all of the monads for functional programming and essence of fp examples, but they only
-%   touched on one monad at a time and really simple semantics. I ended up only really underst
-%   standing monad transformers and free monads 1-2 days before the final presentation, so I
-%   wish I knew more about engineering an interpreter so I could've used this. Contrast w/
-%   FFTW. example is checkStmt for For in typechecker
-%   
+I would have liked a homework or a lecture over engineering a more difficult
+interpreter. I did all of the Monads for Functional Programming and Essence
+of Functional Programming examples, but they only touched on one monad at a time
+and some simple semantics. I felt those papers/tutorials were helpful for learning
+monads, but they didn't bridge the gap between using one monad and building a complex
+or real interpreter that might combine monads or have really deeply nested for blocks.
+I ended up learning about things like monad transformers and free monads later on, and
+I think this might've helped, but I still don't understand them that well.
 
 \end{document}
