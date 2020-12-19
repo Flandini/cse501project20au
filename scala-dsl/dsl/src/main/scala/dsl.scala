@@ -82,7 +82,7 @@ object ExamplePrograms {
     val dimacs_scanner: Program =
         Program(List(
         FuncDecl(
-        IntIterType, None, "scan_line", List(Arg(StringType, None, None, "clause_line")),
+        IntIterType, None, "scan_line", List(Arg(StringType, None, Some(Range(0, 500)), "clause_line")),
             List(
                 For(
                     Iterator("lit",  StrSplit(Var("clause_line"), StrLit(" ", None))), None, Decl(IntIterType, "literals", None),

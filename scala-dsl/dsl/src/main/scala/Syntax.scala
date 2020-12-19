@@ -1,5 +1,7 @@
 import AST._
 
+package syntax {
+
 object Signedness {
     def signed: Boolean = true
     def unsigned: Boolean = false
@@ -97,13 +99,15 @@ case class ForEach(idx: String) {
 }
 
 case class Function(name: String) {
+    import CodeGen._
+
     private var args: List[Arg] = List()
     private var body: List[Statement] = List()
-    private var returnValRange: Option[Range] = None
+    private var returnValRange: Option[AST.Range] = None
     private var returnT: TypeSyntax = ErrorT
 
     def bound(lo: Int, hi: Int): Function = {
-        returnValRange = Some(Range(lo, hi))
+        returnValRange = Some(AST.Range(lo, hi))
         this
     }
 
@@ -134,14 +138,15 @@ case class Function(name: String) {
 
     def startFunction(): Function = this
 
-    def endFunction: FuncDecl =
-        FuncDecl(
-            TypeSyntax.toAstType(returnT),
-            returnValRange,
-            name,
-            args.reverse,
-            body.reverse
-        )
+    def endFunction: Code =
+        genProg(AST.Program(List(
+            AST.FuncDecl(
+                TypeSyntax.toAstType(returnT),
+                returnValRange,
+                name,
+                args.reverse,
+                body.reverse
+        ))))
 
 }
 
@@ -168,29 +173,13 @@ object StringSyntax {
         def ston: Expr = Ston(src)
     }
 }
+}
 
 object SyntaxTest {
-    import StringSyntax._
-    import CodeGen._
+    import syntax._
+    import syntax.StringSyntax._
 
     def main(args: Array[String]): Unit = {
-        // val loop =
-        //     ForEach("lit")
-        //         .inExpr(Var("clause_line").split(" "))
-        //         .withAcc(Variable("literals").withType(IntIterT()))
-        //     .startFor()
-        //         .setAcc(Ston(Var("lit")))
-        //     .endFor
-
-        // val scanner = 
-        //     Function("scan_line")
-        //     .returnType(IntIterT())
-        //     .arg(Argument("clause_line").withType(StringT))
-        //     .start()
-        //         .loop(loop)
-        //         .ret(Var("literals"))
-        //     .end
-
         val scanner = 
             Function("scan_line")
             .returnType(IntIterT())
@@ -206,7 +195,6 @@ object SyntaxTest {
                 .ret(Var("literals"))
             .endFunction
         
-        println(genProg(Program(List(scanner))))
         println(scanner)
     }
 }
